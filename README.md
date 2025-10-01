@@ -33,31 +33,42 @@ This work builds upon and adapts components from:
 
 ## Quick Start
 
-1. **Setup Environment & GitHub Integration**
+### Local Development
+
+1. **Setup Environment**
    ```bash
-   # Setup GitHub data collection (creates .env file)
-   ./setup_github.sh
+   # Activate the conda environment
+   conda activate xagent
    
-   # Test the system
-   ./run_in_env.sh test_enhanced_nlu.py
+   # Navigate to project directory
+   cd /path/to/hicxai-research
    ```
 
-2. **Deploy A/B Testing**
+2. **Run A/B Testing Locally**
    ```bash
-   # Start both versions concurrently
-   ./deploy_ab_testing.sh
+   # Control Group (v0) - Minimal interface
+   streamlit run app_v0.py --server.port 8501
    
-   # Monitor progress
-   ./monitor_progress.sh
+   # Treatment Group (v1) - Luna with SHAP visualizations
+   streamlit run app_v1.py --server.port 8502
    ```
 
-3. **Share with Test Subjects**
-   ```bash
-   # Get shareable links
-   ./generate_user_links.sh
-   
-   # Check status
-   ./check_ab_status.sh
+3. **Access Local Apps**
+   - **Control Group**: http://localhost:8501
+   - **Treatment Group**: http://localhost:8502
+
+### Cloud Deployment (Streamlit Cloud)
+
+1. **Create Apps**
+   - Go to https://streamlit.io/cloud
+   - Create app with repository: `ksauka/hicxai-research`
+   - For Control: Use `app_v0.py` as main file
+   - For Treatment: Use `app_v1.py` as main file
+
+2. **Configure Secrets** (for both apps)
+   ```toml
+   GITHUB_TOKEN = "your_github_personal_access_token"
+   GITHUB_REPO = "yourusername/your-private-data-repo"
    ```
 
 ## Feedback
@@ -71,23 +82,25 @@ This work builds upon and adapts components from:
 4. **Ambiguity Handling**: Provides suggestions when user intent is unclear
 
 ## Key Components
+- `src/app.py`: Main Streamlit application with A/B testing logic
+- `src/ab_config.py`: A/B testing configuration and version control
 - `src/nlu.py`: SimCSE-based semantic similarity and intent classification
 - `src/xai_methods.py`: Natural language explanation generation for SHAP, DiCE, Anchor
-- `src/agent.py`: Main orchestrator for user interaction and response generation
-- `src/constraints.py`: Intent-to-method mapping and user messages
-- `run_in_env.sh`: Environment management utility
+- `src/shap_visualizer.py`: SHAP visualization components for treatment group
+- `src/github_saver.py`: Secure feedback collection to private repository
+- `app_v0.py` / `app_v1.py`: Streamlit Cloud deployment entry points
 
-## Extending
-- Add new questions to `bert_data/Median_4.csv` (no retraining needed)
+## Extending the Platform
+- Add new questions to `data_questions/Median_4.csv` (no retraining needed)
 - Extend XAI methods in `src/xai_methods.py` 
 - Add new intent mappings in `src/constraints.py`
+- Modify A/B testing variants in `src/ab_config.py`
+- Customize UI themes in `.streamlit/config.toml`
 
-## Environment Management
-The included `run_in_env.sh` script ensures consistent execution:
-- Automatically navigates to project directory
-- Activates the correct conda environment
-- Handles dependency conflicts
-- Provides colored status output
+## Dependencies
+- **Python 3.8+** (conda environment: `xagent`)
+- **Core packages**: streamlit, pandas, scikit-learn, shap, simcse
+- **Full dependencies**: See `requirements.txt` for Streamlit Cloud or `pyproject.toml` for Poetry
 
 ## References
 
