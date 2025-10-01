@@ -679,7 +679,7 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
         
         feedback_text = st.text_area(
             "Additional comments (optional):",
-            placeholder="Share any suggestions or thoughts about your experience..."
+            placeholder="“What feature would help you most next time?”\n“What would make this agent's explanations more useful?”..."
         )
         
         submitted = st.form_submit_button("Submit Feedback 🚀")
