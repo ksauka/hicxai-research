@@ -1,0 +1,121 @@
+# Environment files (SENSITIVE - NEVER COMMIT)
+.env
+.env.local
+.env.production
+.env.staging
+
+# Research data (SENSITIVE - NEVER COMMIT)  
+feedback/
+logs/
+*.log
+data/
+results/
+analysis/
+
+# Legacy/Experimental Code (NOT NEEDED FOR DEPLOYMENT)
+XAgent/
+experiments/
+old/
+archive/
+backup/
+temp/
+tmp/
+
+# Documentation files (keep only essential ones)
+*.md
+!README.md
+!DEPLOYMENT_GUIDE.md
+
+# Test files (not needed in production)
+test_*.py
+debug_*.py
+*_test.py
+*_debug.py
+
+# Jupyter notebooks (experimental)
+*.ipynb
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyc
+*.pyo
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Data files (research data)
+*.json
+*.csv
+*.pkl
+*.h5
+*.data
+*.model
+
+# Model files (can be large)
+models/*.pkl
+models/*.h5
+models/*.model
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Development scripts
+run_in_env.sh
+setup_*.sh
+check_*.sh
+monitor_*.sh
+generate_*.sh
+deploy_ab_testing.sh
+stop_ab_testing.sh
+
+# Environment management
+environment.yml
+poetry.lock
+.conda/
+.env*
+!.env.example
+
+# Backup files
+*.backup
+*.bak
+*.orig
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+.sublime-*
+
+# Git files
+.git/
+.gitattributes
+
+# Deployment helpers (keep only what's needed)
+prepare_deployment.sh
+deploy_safe.sh
+
+# Keep only essential files for Streamlit Cloud

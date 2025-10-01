@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "hicxai-agent"
+package-mode = false
+version = "0.1.0"
+description = ""
+authors = ["ksauka <k.sauka@hva.nl>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.8.5"
+# Core ML/NLP dependencies
+transformers = "4.29.2"
+numpy = ">=1.19.5,<1.20"
+torch = "1.13.1"
+# SimCSE and semantic search
+simcse = "0.4"
+sentence-transformers = "2.2.0"
+# XAI libraries  
+shap = "0.41.0"
+dice-ml = "0.9"
+anchor-exp = "0.0.2.0"
+# Web interface
+streamlit = "1.22.0"
+# Utilities
+pandas = "1.2.5"
+scikit-learn = "1.1.0"
+matplotlib = "3.5.0"
+# Optional optimization
+optuna = "4.5.0"
+accelerate = "0.20.3"
+faiss-gpu = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
