@@ -171,7 +171,7 @@ MIT License
 
 ## Generative Rewriter (Optional)
 
-You can enable a friendlier, style-controlled paraphrase of explanations. The default model is `gpt-4o-mini`.
+Enable a friendlier, style-controlled paraphrase of explanations. The default model is `gpt-4o-mini`.
 
 Environment variables:
 
@@ -191,10 +191,5 @@ export HICXAI_OPENAI_MODEL=gpt-4o-mini
 streamlit run src/app.py
 ```
 
-Streamlit Cloud (protecting tokens):
 
-- Open your app → Settings → Secrets and add `OPENAI_API_KEY = your_key`.
-- Do not print or log the key; this project never echoes it.
-- The app automatically reads `st.secrets["OPENAI_API_KEY"]` when the env var is missing.
-- Optionally add `HICXAI_OPENAI_BASE_URL` to Secrets if you use a proxy.
 
