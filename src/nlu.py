@@ -75,7 +75,8 @@ class NLU:
                     'confidence': 0.95,
                     'matched_question': "Provide a simple rule-based explanation for this decision."
                 }, 0.95, []
-            if any(k in text for k in shap_keywords):
+            # Explicitly detect single-word 'why' queries too
+            if text.strip() == "why" or any(k in text for k in shap_keywords):
                 return {
                     'intent': 'shap',
                     'label': None,
@@ -212,7 +213,7 @@ class NLU:
             
             # Define key patterns for different XAI methods
             shap_patterns = [
-                "feature", "important", "impact", "contribute", "influence", "matter", "weigh", "explain"
+                "feature", "important", "impact", "contribute", "influence", "matter", "weigh", "explain", "why"
             ]
             dice_patterns = [
                 "change", "different", "modify", "counterfact", "should", "what if", "approved", "denied"

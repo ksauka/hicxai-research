@@ -199,15 +199,14 @@ class LoanAssistant:
         if not user_input.strip():
             return "I didn't catch that. Could you please say something?"
         
-        # Check for XAI questions regardless of current state (if application is complete)
+        # Check for XAI questions regardless of current state once a decision has been presented
         user_lower = user_input.lower()
         xai_keywords = ['what if', 'why', 'explain', 'how', 'which factors', 'feature importance',
                         'counterfactual', 'simple rules', 'rule-based', 'rule based', 'rules', 'anchor',
                         'what changes', 'what would happen']
-        
-        if (self.conversation_state == ConversationState.COMPLETE and 
-            any(keyword in user_lower for keyword in xai_keywords)):
-            # Route to explanation handler
+
+        # If we've already provided a decision (loan_approved is True/False), allow immediate XAI routing
+        if self.application.loan_approved is not None and any(keyword in user_lower for keyword in xai_keywords):
             return self._handle_explanation(user_input)
         
         # Route to appropriate handler based on conversation state

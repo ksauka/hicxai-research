@@ -16,7 +16,7 @@ This work builds upon and adapts components from:
 - **[XAgent](https://github.com/bach1292/XAGENT)** by bach1292 - Original XAI agent framework and Adult dataset integration
 - **Adult Dataset** from UCI Machine Learning Repository via XAgent implementation
 - **Question-Intent Dataset** (`data_questions/Median_4.csv`) curated by [XAgent](https://github.com/bach1292/XAGENT), adapted from original work by [Liao et al. (2020)](https://arxiv.org/abs/2001.02478)
-- **SimCSE** semantic similarity model for zero-shot intent classification
+- **sentence-transformers** (prefers all-MiniLM-L6-v2) for semantic similarity in intent classification. The original XAgent used SimCSE; we preserve the spirit of zero-shot matching while defaulting to sentence-transformers when available.
 
 ## Key Research Contributions
 
@@ -68,15 +68,23 @@ This work builds upon and adapts components from:
    - For Control: Use `app_v0.py` as main file
    - For Treatment: Use `app_v1.py` as main file
 
-2. **Configure Secrets** (for both apps)
+2. **Configure Secrets** (optional, per app)
+   Add only what you use:
    ```toml
-   GITHUB_TOKEN = "your_github_personal_access_token"
-   GITHUB_REPO = "yourusername/your-private-data-repo"
+   # Optional: generative rewriter
+   OPENAI_API_KEY = "sk-..."
+   # Optional: proxy/base URL
+   HICXAI_OPENAI_BASE_URL = "https://api.openai.com/v1"
+
+   # Optional: GitHub feedback saver
+   GITHUB_TOKEN = "ghp_..."
+   GITHUB_REPO = "yourusername/your-private-repo"
+   ```
 
 3. **Environment & Python Version**
-   - Cloud installs from `requirements.txt` (CPU-friendly set compatible with Python 3.13).
-   - Local development can keep a richer toolchain (Poetry, CUDA, etc.) without affecting Cloud; `pyproject.toml` and `poetry.lock` are ignored by git.
-   ```
+   - Cloud installs from `requirements.txt` only (CPU-friendly, Python 3.13 compatible).
+   - Apt packages from `packages.txt` are installed automatically (includes `graphviz`).
+   - Local GPU tooling is optional and does not affect Cloud.
 
 ## Feedback
 - The app collects user feedback with conversational prompts. All fields are optional.
@@ -97,6 +105,31 @@ This work builds upon and adapts components from:
 - `src/github_saver.py`: Secure feedback collection to private repository
 - `app_v0.py` / `app_v1.py`: Streamlit Cloud deployment entry points
 
+## Configuration
+
+Environment variables used by the app:
+- `HICXAI_VERSION`: `v0` or `v1` (default `v0`). Also supported as CLI flags when running `src/app.py`: `--v0` / `--v1` or `--HICXAI_VERSION=v1` or `--ab=v1`.
+- `OPENAI_API_KEY`: enables optional generative rewriter.
+- `HICXAI_GENAI`: `on` (default) or `off` to disable the rewriter.
+- `HICXAI_OPENAI_MODEL`: defaults to `gpt-4o-mini`.
+- `HICXAI_OPENAI_BASE_URL` or `OPENAI_BASE_URL`: optional proxy/base URL for OpenAI SDK.
+- `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python`: optional workaround for protobuf issues.
+
+## Data & Assets
+
+Tracked data and assets for out-of-the-box operation:
+- `data/adult.data`
+- `dataset_info/adult.json`
+- `data_questions/Median_4.csv`
+- `assets/luna_avatar.png` (avatar used in v1). The app also checks `data_questions/*.png` and `images/assistant_avatar.png` if present.
+
+## Troubleshooting
+
+- FileNotFoundError for `data/adult.data` on Cloud: ensure dataset files are tracked (this repo includes them).
+- Requirements parse errors (InvalidMarker / inline comments): avoid inline comments in `requirements.txt` version lines.
+- Graphviz/dtreeviz issues: `packages.txt` includes `graphviz` for apt; Cloud installs it automatically.
+- Protobuf errors: set `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python` in the environment.
+
 ## Extending the Platform
 - Add new questions to `data_questions/Median_4.csv` (no retraining needed)
 - Extend XAI methods in `src/xai_methods.py` 
@@ -105,11 +138,9 @@ This work builds upon and adapts components from:
 - Customize UI themes in `.streamlit/config.toml`
 
 ## Dependencies
-- **Local GPU dev**: Python 3.10 (conda env `hicxai_rtx5070`)
-   - Create env: `conda env create -f environment_rtx5070.yml`
-   - Install cu128 torch trio: `pip install -r requirements_rtx5070_torch.txt`
-- **Streamlit Cloud**: uses `requirements.txt` -> `requirements-streamlit.txt` (CPU wheels)
-- Core packages: streamlit, pandas, scikit-learn, shap, sentence-transformers, dice-ml, anchor-exp, dtreeviz, graphviz
+- **Streamlit Cloud**: `requirements.txt` only (CPU wheels, Python 3.13 compatible). `packages.txt` installs apt `graphviz`.
+- **Local GPU dev (optional)**: `environment_rtx5070.yml` + `requirements_rtx5070_torch.txt` for CUDA workflows.
+- Core packages: streamlit, pandas, scikit-learn, shap, dice-ml, anchor-exp, dtreeviz, graphviz, openai (optional)
 
 ## References
 
