@@ -5,8 +5,21 @@ from anchor import anchor_tabular
 import matplotlib.pyplot as plt
 import os
 from constraints import *
-import dtreeviz
-import graphviz
+
+# Mode selection: 'full' requires dtreeviz; 'lite' skips it (good for Streamlit)
+_MODE = os.getenv('HICXAI_MODE', 'lite').strip().lower()
+
+# Visualization deps
+try:
+    import dtreeviz  # noqa: F401
+    import graphviz  # noqa: F401
+    _DTREEVIZ_AVAILABLE = True
+except Exception:
+    _DTREEVIZ_AVAILABLE = False
+    if _MODE == 'full':
+        raise ImportError(
+            "dtreeviz/graphviz are required in FULL mode. Install with conda: 'conda install -c conda-forge graphviz python-graphviz' and pip: 'pip install dtreeviz'"
+        )
 
 def explain_with_shap(agent, question_id=None):
     """SHAP explanation with improved error handling and natural language output"""
@@ -165,6 +178,9 @@ def route_to_xai_method(agent, intent_result):
     """Route user question to appropriate XAI method based on intent"""
     if isinstance(intent_result, dict) and 'intent' in intent_result:
         method = intent_result['intent']
+        # Normalize common aliases
+        if method in {"rule", "rules", "rule_based", "rule-based", "local_explanation"}:
+            method = 'anchor'
         
         if method == 'shap':
             return explain_with_shap(agent, intent_result.get('label'))
@@ -184,12 +200,6 @@ def route_to_xai_method(agent, intent_result):
             'explanation': "I'm not sure how to explain that. Could you rephrase your question?",
             'suggestions': intent_result[2] if len(intent_result) > 2 else []
         }
-        if feature == 2:
-            instance[feature] = self.dataset_anchor.categorical_names[feature].index(
-                str(int(instance[feature])))
-        else:
-            instance[feature] = self.dataset_anchor.categorical_names[feature].index(instance[feature])
-    exp = explainer.explain_instance(np.array(instance), self.clf_anchor.predict, threshold=0.80)
-    return 'If you keep these conditions: %s, the prediction will stay the same.' % (' AND '.join(exp.names()))
+
 
 

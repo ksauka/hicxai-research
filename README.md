@@ -48,10 +48,13 @@ This work builds upon and adapts components from:
    ```bash
    # Control Group (v0) - Minimal interface
    streamlit run app_v0.py --server.port 8501
-   
+
    # Treatment Group (v1) - Luna with SHAP visualizations
-   streamlit run app_v1.py --server.port 8502
+   # Tip: enable full visualizations locally
+   HICXAI_MODE=full streamlit run app_v1.py --server.port 8502
    ```
+
+   Note: The entrypoints `app_v0.py` and `app_v1.py` force their respective versions regardless of environment variables. When running `src/app.py` directly, the `HICXAI_VERSION` environment variable takes precedence over CLI args; default is v0.
 
 3. **Access Local Apps**
    - **Control Group**: http://localhost:8501
@@ -69,6 +72,10 @@ This work builds upon and adapts components from:
    ```toml
    GITHUB_TOKEN = "your_github_personal_access_token"
    GITHUB_REPO = "yourusername/your-private-data-repo"
+
+3. **Environment & Python Version**
+   - This repo includes `runtime.txt` (3.10) to avoid Python 3.13/build issues on Cloud (distutils removal).
+   - If Cloud asks for a requirements file, point it to `requirements-streamlit.txt` for a CPU-friendly set.
    ```
 
 ## Feedback
@@ -76,7 +83,7 @@ This work builds upon and adapts components from:
 - Feedback is saved to GitHub for later processing and model improvement.
 
 ## How It Works
-1. **Question Understanding**: SimCSE finds semantically similar questions in the knowledge base
+1. **Question Understanding**: sentence-transformers (all-MiniLM-L6-v2) finds semantically similar questions in the knowledge base (GPU locally; CPU on Streamlit)
 2. **Intent Classification**: Maps matched questions to XAI method intents (SHAP, DiCE, Anchor)
 3. **Natural Explanations**: Generates human-readable explanations instead of technical outputs
 4. **Ambiguity Handling**: Provides suggestions when user intent is unclear
@@ -84,7 +91,7 @@ This work builds upon and adapts components from:
 ## Key Components
 - `src/app.py`: Main Streamlit application with A/B testing logic
 - `src/ab_config.py`: A/B testing configuration and version control
-- `src/nlu.py`: SimCSE-based semantic similarity and intent classification
+- `src/nlu.py`: sentence-transformers semantic similarity and intent classification
 - `src/xai_methods.py`: Natural language explanation generation for SHAP, DiCE, Anchor
 - `src/shap_visualizer.py`: SHAP visualization components for treatment group
 - `src/github_saver.py`: Secure feedback collection to private repository
@@ -98,9 +105,11 @@ This work builds upon and adapts components from:
 - Customize UI themes in `.streamlit/config.toml`
 
 ## Dependencies
-- **Python 3.8+** (conda environment: `xagent`)
-- **Core packages**: streamlit, pandas, scikit-learn, shap, simcse
-- **Full dependencies**: See `requirements.txt` for Streamlit Cloud or `pyproject.toml` for Poetry
+- **Local GPU dev**: Python 3.10 (conda env `hicxai_rtx5070`)
+   - Create env: `conda env create -f environment_rtx5070.yml`
+   - Install cu128 torch trio: `pip install -r requirements_rtx5070_torch.txt`
+- **Streamlit Cloud**: uses `requirements.txt` -> `requirements-streamlit.txt` (CPU wheels)
+- Core packages: streamlit, pandas, scikit-learn, shap, sentence-transformers, dice-ml, anchor-exp, dtreeviz, graphviz
 
 ## References
 
@@ -128,3 +137,33 @@ If you use this platform in your research, please cite:
 
 ## License
 MIT License
+
+## Generative Rewriter (Optional)
+
+You can enable a friendlier, style-controlled paraphrase of explanations. The default model is `gpt-4o-mini`.
+
+Environment variables:
+
+- `OPENAI_API_KEY` – required to enable
+- `HICXAI_GENAI` – `on` (default) or `off`
+- `HICXAI_OPENAI_MODEL` – defaults to `gpt-4o-mini`
+- `HICXAI_STYLE` – `short` | `detailed` | `actionable` (v1 sidebar can set this at runtime)
+- `HICXAI_TEMPERATURE` – defaults to `0.2`
+- `HICXAI_MAX_TOKENS` – defaults to `300`
+- `HICXAI_OPENAI_BASE_URL` – optional base URL for proxies (respects `OPENAI_BASE_URL` too)
+
+Example (local):
+
+```bash
+export OPENAI_API_KEY=sk-...
+export HICXAI_OPENAI_MODEL=gpt-4o-mini
+streamlit run src/app.py
+```
+
+Streamlit Cloud (protecting tokens):
+
+- Open your app → Settings → Secrets and add `OPENAI_API_KEY = your_key`.
+- Do not print or log the key; this project never echoes it.
+- The app automatically reads `st.secrets["OPENAI_API_KEY"]` when the env var is missing.
+- Optionally add `HICXAI_OPENAI_BASE_URL` to Secrets if you use a proxy.
+

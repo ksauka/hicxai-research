@@ -8,8 +8,10 @@ import re
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
+from ab_config import config
 import pandas as pd
 import numpy as np
+import difflib
 
 # Import natural conversation enhancer
 try:
@@ -95,6 +97,18 @@ class LoanAssistant:
         self.current_field = None
         self.field_attempts = {}
         self.last_shap_result = None  # Store SHAP results for visualization
+        self.show_what_if_lab = False  # Show What‑if Lab in UI when user asks what-if
+        # Allowed categorical values (canonical forms)
+        self.allowed_values = {
+            'workclass': ['Private', 'Self-emp-not-inc', 'Self-emp-inc', 'Federal-gov', 'Local-gov', 'State-gov', 'Without-pay', 'Never-worked', '?'],
+            'education': ['Preschool','1st-4th','5th-6th','7th-8th','9th','10th','11th','12th','HS-grad','Some-college','Assoc-voc','Assoc-acdm','Bachelors','Masters','Prof-school','Doctorate'],
+            'marital_status': ['Married-civ-spouse', 'Divorced', 'Never-married', 'Separated', 'Widowed', 'Married-spouse-absent', 'Married-AF-spouse'],
+            'occupation': ['Tech-support','Craft-repair','Other-service','Sales','Exec-managerial','Prof-specialty','Handlers-cleaners','Machine-op-inspct','Adm-clerical','Farming-fishing','Transport-moving','Priv-house-serv','Protective-serv','Armed-Forces','?'],
+            'sex': ['Male', 'Female'],
+            'race': ['White', 'Asian-Pac-Islander', 'Amer-Indian-Eskimo', 'Other', 'Black'],
+            'native_country': ['United-States', 'Cambodia', 'Canada', 'China', 'Columbia', 'Cuba', 'Dominican-Republic', 'Ecuador', 'El-Salvador', 'England', 'France', 'Germany', 'Greece', 'Guatemala', 'Haiti', 'Holand-Netherlands', 'Honduras', 'Hong', 'Hungary', 'India', 'Iran', 'Ireland', 'Italy', 'Jamaica', 'Japan', 'Laos', 'Mexico', 'Nicaragua', 'Outlying-US(Guam-USVI-etc)', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Puerto-Rico', 'Scotland', 'South', 'Taiwan', 'Thailand', 'Trinadad&Tobago', 'Vietnam', 'Yugoslavia', '?'],
+            'relationship': ['Wife', 'Own-child', 'Husband', 'Not-in-family', 'Other-relative', 'Unmarried']
+        }
         
         # Field collection order and prompts
         self.field_order = [
@@ -143,6 +157,43 @@ class LoanAssistant:
             9: "Background - Country", 10: "Background - Demographics"
         }
 
+    # ----- Helper methods for version-aware messaging -----
+    def _is_v1(self) -> bool:
+        try:
+            return getattr(config, 'version', 'v0') == 'v1'
+        except Exception:
+            return False
+
+    def _pretty_field(self, field: str) -> str:
+        return field.replace('_', ' ').title()
+
+    def _format_error(self, field: str, base_msg: str, allowed: Optional[List[str]] = None) -> str:
+        if not self._is_v1():
+            # v0: concise, technical
+            if allowed:
+                return f"{base_msg} Valid options are: {', '.join(allowed)}."
+            return base_msg
+        # v1: anthropomorphic tone
+        msg = f"I might be misreading this. For {self._pretty_field(field)}, {base_msg}"
+        if allowed:
+            sample = allowed[:8]
+            more = " (+ more)" if len(allowed) > 8 else ""
+            msg += f"\n\nHere are some examples I can accept: {', '.join(sample)}{more}."
+        msg += "\nIf you'd like, I can list all choices or you can pick from the buttons."
+        return msg
+
+    def _format_warning(self, field: str, warn_msg: str) -> str:
+        if not self._is_v1():
+            return warn_msg
+        return f"Quick heads‑up about {self._pretty_field(field)}: {warn_msg} If that was intentional, we’ll proceed; otherwise feel free to adjust."
+
+    def _suggest_categorical(self, field: str, value: str, n: int = 3) -> List[str]:
+        """Suggest close categorical options using fuzzy match."""
+        allowed = self.allowed_values.get(field, [])
+        if not allowed:
+            return []
+        return difflib.get_close_matches(str(value), allowed, n=n, cutoff=0.6)
+
     def handle_message(self, user_input: str) -> str:
         """Main message handler with enhanced natural conversation and XAI routing"""
         if not user_input.strip():
@@ -150,8 +201,9 @@ class LoanAssistant:
         
         # Check for XAI questions regardless of current state (if application is complete)
         user_lower = user_input.lower()
-        xai_keywords = ['what if', 'why', 'explain', 'how', 'which factors', 'feature importance', 
-                       'counterfactual', 'simple rules', 'anchor', 'what changes', 'what would happen']
+        xai_keywords = ['what if', 'why', 'explain', 'how', 'which factors', 'feature importance',
+                        'counterfactual', 'simple rules', 'rule-based', 'rule based', 'rules', 'anchor',
+                        'what changes', 'what would happen']
         
         if (self.conversation_state == ConversationState.COMPLETE and 
             any(keyword in user_lower for keyword in xai_keywords)):
@@ -264,9 +316,9 @@ class LoanAssistant:
 
     def _handle_processing(self, user_input: str) -> str:
         """Handle post-processing phase"""
-        if user_input.lower() in ['explain', 'why', 'how', 'reason', 'details']:
+        if self._is_xai_query(user_input):
             self.conversation_state = ConversationState.EXPLAINING
-            return self._generate_explanation()
+            return self._handle_explanation(user_input)
         elif user_input.lower() in ['new', 'another', 'restart', 'again']:
             return self._restart_application()
         else:
@@ -281,9 +333,7 @@ class LoanAssistant:
         
         if user_lower in ['new', 'another', 'restart', 'again', 'start over']:
             return self._restart_application()
-        elif user_lower in ['explain', 'why', 'how', 'reason', 'details', 'decision']:
-            return self._generate_explanation()
-        elif any(word in user_lower for word in ['what if', 'change', 'different']):
+        elif self._is_xai_query(user_input):
             return self._handle_explanation(user_input)
         else:
             # Check if the application has been processed
@@ -325,14 +375,42 @@ class LoanAssistant:
                 try:
                     import pandas as pd
                     # Get the label for the matched question from the NLU dataframe
-                    label = self.agent.nlu_model.df.query('Question == @matched_question')['Label'].iloc[0]
-                    xai_method = self.agent.nlu_model.map_label_to_xai_method(label)
+                    df_matches = self.agent.nlu_model.df.query('Question == @matched_question')
+                    if len(df_matches) > 0:
+                        label = df_matches['Label'].iloc[0]
+                        xai_method = self.agent.nlu_model.map_label_to_xai_method(label)
+                    else:
+                        # Fallback: infer method from the matched question text
+                        mq = (matched_question or '').lower()
+                        if any(k in mq for k in ['rule', 'rule-based', 'rule based', 'anchor', 'simple requirement', 'minimum requirement']):
+                            xai_method = 'anchor'
+                            label = None
+                        elif any(k in mq for k in ['what if', 'change', 'counterfactual']):
+                            xai_method = 'dice'
+                            label = None
+                        else:
+                            xai_method = 'shap'
+                            label = None
                     
                     print(f"🔍 DEBUG: Label: {label}, XAI method: {xai_method}")
                     
+                    # Heuristic override: if mapping returned 'general', infer from input
+                    inferred_method = xai_method
+                    if xai_method == 'general':
+                        ui = (user_input or '').lower()
+                        if any(k in ui for k in ['rule', 'rule-based', 'rule based', 'anchor']):
+                            inferred_method = 'anchor'
+                        elif any(k in ui for k in ['what if', 'change', 'different', 'counterfactual']):
+                            inferred_method = 'dice'
+                        else:
+                            inferred_method = 'shap'
+
+                    # If user is asking what-if (counterfactual), enable What‑if Lab in UI
+                    if inferred_method == 'dice':
+                        self.show_what_if_lab = True
                     # Create intent result in the format expected by route_to_xai_method
                     intent_result = {
-                        'intent': xai_method,
+                        'intent': inferred_method,
                         'label': label,
                         'matched_question': matched_question
                     }
@@ -347,7 +425,7 @@ class LoanAssistant:
                     explanation = explanation_result.get('explanation', 'Sorry, I could not generate an explanation.')
                     
                     # Store SHAP results for visualization (if available)
-                    if (xai_method == 'shap' and 
+                    if (inferred_method == 'shap' and 
                         isinstance(explanation_result, dict) and 
                         ('feature_impacts' in explanation_result or 'shap_values' in explanation_result)):
                         self.last_shap_result = explanation_result
@@ -377,6 +455,18 @@ class LoanAssistant:
                 formatted_explanation = explanation
             else:
                 formatted_explanation = str(explanation)
+
+            # Optional generative rewrite for v1 to make responses more natural
+            try:
+                if getattr(config, 'version', 'v0') == 'v1' and NATURAL_CONVERSATION_AVAILABLE:
+                    context_info = {
+                        'intent': intent_result.get('intent') if isinstance(locals().get('intent_result'), dict) else None,
+                        'matched_question': locals().get('matched_question'),
+                        'prediction': self.agent.predicted_class
+                    }
+                    formatted_explanation = enhance_response(formatted_explanation, context_info, response_type="explanation")
+            except Exception:
+                pass
             
             return (f"{context_msg}**AI Explanation:**\n\n{formatted_explanation}\n\n"
                    "Would you like another explanation or start a new application? "
@@ -390,6 +480,19 @@ class LoanAssistant:
             return ("I'm sorry, I couldn't generate that explanation right now. "
                    "Would you like to try asking differently or start a new application? "
                    f"Error: {str(e)}")
+
+    def _is_xai_query(self, text: str) -> bool:
+        """Decide if user input is an XAI question using NLU intent mapping with a small fallback.
+        Uses sentence-transformers-based classifier; falls back to lightweight keywords if needed."""
+        try:
+            intent_result, _, _ = self.agent.nlu_model.classify_intent(text)
+            if isinstance(intent_result, dict):
+                return intent_result.get('intent') in {'shap', 'dice', 'anchor'}
+        except Exception:
+            pass
+        # Fallback minimal heuristic
+        t = (text or '').lower()
+        return any(k in t for k in ['why', 'explain', 'factor', 'feature', 'importance', 'what if', 'change', 'counterfactual', 'rule', 'anchor'])
 
     def _process_field_input(self, field: str, user_input: str) -> Dict[str, Any]:
         """Process input for a specific field"""
@@ -415,18 +518,29 @@ class LoanAssistant:
             # Validate the value
             validation_result = self._validate_field_value(field, value)
             if not validation_result['valid']:
+                # v1 anthropomorphic error formatting where applicable
+                err = validation_result.get('message', 'Invalid value')
+                if 'allowed' in validation_result:
+                    err = self._format_error(field, err, validation_result['allowed'])
+                else:
+                    err = self._format_error(field, err)
                 return {
                     'success': False,
-                    'message': validation_result['message']
+                    'message': err
                 }
             
-            # Set the value
-            setattr(self.application, field, value)
+            # Set the normalized value if provided
+            normalized = validation_result.get('normalized', value)
+            setattr(self.application, field, normalized)
             self.field_attempts[field] = 0  # Reset attempts on success
             
+            warn = validation_result.get('warning')
+            msg = f"Got it! {field.replace('_', ' ').title()}: {normalized}"
+            if warn:
+                msg += f"\n\n⚠️ {self._format_warning(field, warn)}"
             return {
                 'success': True,
-                'message': f"Got it! {field.replace('_', ' ').title()}: {value}"
+                'message': msg
             }
             
         except Exception as e:
@@ -488,13 +602,61 @@ class LoanAssistant:
                     if int_val < rules.get('min', float('-inf')) or int_val > rules.get('max', float('inf')):
                         return {
                             'valid': False,
-                            'message': f"Please enter a number between {rules.get('min', 'any')} and {rules.get('max', 'any')}."
+                            'message': f"Please enter a number between {rules.get('min', 'any')} and {rules.get('max', 'any')} for {self._pretty_field(field)}."
                         }
+                    # Soft plausibility warnings for extreme-but-allowed values
+                    warning = None
+                    if field == 'hours_per_week' and int_val >= 80:
+                        warning = "That is an unusually high number of weekly hours. Please confirm this is intentional."
+                    if field == 'age' and int_val >= 85:
+                        warning = (warning or "") + (" " if warning else "") + "Age is at the extreme upper bound of the dataset."
+                    if field == 'capital_gain' and int_val > 50000:
+                        warning = (warning or "") + (" " if warning else "") + "Capital gain is exceptionally high relative to typical values."
+                    if field == 'capital_loss' and int_val > 3000:
+                        warning = (warning or "") + (" " if warning else "") + "Capital loss is unusually high relative to typical values."
+                    result = {'valid': True, 'message': '', 'normalized': int_val}
+                    if warning:
+                        result['warning'] = warning
+                    return result
                 except ValueError:
                     return {
                         'valid': False,
-                        'message': f"Please enter a valid number for {field.replace('_', ' ')}."
+                        'message': f"Please enter a valid number for {self._pretty_field(field)}."
                     }
+
+        # Enforce categorical whitelists (case-insensitive) and normalize to canonical values
+        if field in getattr(self, 'allowed_values', {}):
+            allowed = self.allowed_values[field]
+            # Exact match
+            if value in allowed:
+                return {'valid': True, 'message': '', 'normalized': value}
+            # Case-insensitive match
+            val_norm = str(value).strip()
+            for opt in allowed:
+                if val_norm.lower() == opt.lower():
+                    return {'valid': True, 'message': '', 'normalized': opt}
+            # Special handling for generic 'other'
+            if val_norm.lower() in ['other', 'others', 'something else', 'none of the above']:
+                if field == 'race' and 'Other' in allowed:
+                    return {'valid': True, 'message': '', 'normalized': 'Other'}
+                if field == 'occupation':
+                    return {
+                        'valid': False,
+                        'message': "For occupation, the dataset has 'Other-service' but not plain 'Other'. Please choose 'Other-service' or a specific occupation."
+                    }
+                if field == 'relationship':
+                    return {
+                        'valid': False,
+                        'message': "For relationship, the dataset has 'Other-relative' but not plain 'Other'. Please choose 'Other-relative' or a specific relationship."
+                    }
+            # Unknown '?' permitted only if present in allowed list
+            if val_norm == '?' and '?' in allowed:
+                return {'valid': True, 'message': '', 'normalized': '?'}
+            return {
+                'valid': False,
+                'message': f"'{value}' isn't a valid {self._pretty_field(field)}.",
+                'allowed': allowed
+            }
         
         # Handle "Other" category and "?" (unknown/missing) values with accurate dataset information
         if value == 'Other' or value == '?' or value == 'Unknown/Prefer not to say':
@@ -522,27 +684,27 @@ class LoanAssistant:
                     if value in ['?', 'Unknown/Prefer not to say']:
                         return {
                             'valid': False,
-                            'message': f"I understand you may prefer not to specify, but unfortunately the dataset requires specific values for {field.replace('_', ' ')}. This field doesn't support 'unknown' values. Could you please select the option that best fits your situation from the available choices?"
+                            'message': f"I understand you may prefer not to specify, but this field doesn't support 'unknown' values in the dataset. Could you select the closest option for {self._pretty_field(field)}?"
                         }
                     else:
                         return {
                             'valid': False,
-                            'message': f"I'm sorry, but the Adult (Census Income) dataset that trained this model doesn't include 'Other' as a category for {field.replace('_', ' ')}. The historical dataset only contains specific predefined categories. Could you please select from the available options, or choose the closest match to your situation?"
+                            'message': f"The dataset doesn't include 'Other' as a category for {self._pretty_field(field)}. Please choose from the available options."
                         }
             elif field == 'occupation':
                 # Occupation has "Other-service" but not plain "Other"
                 return {
                     'valid': False,
-                    'message': f"For occupation, the dataset has 'Other-service' but not plain 'Other'. Would you like to select 'Other-service' or choose a more specific occupation from the available options?"
+                    'message': "For occupation, please choose 'Other-service' or a specific occupation from the list."
                 }
             elif field == 'relationship':
                 # Relationship has "Other-relative" but not plain "Other"  
                 return {
                     'valid': False,
-                    'message': f"For relationship, the dataset has 'Other-relative' but not plain 'Other'. Would you like to select 'Other-relative' or choose from the available relationship options?"
+                    'message': "For relationship, please choose 'Other-relative' or one of the listed relationships."
                 }
         
-        return {'valid': True, 'message': ''}
+        return {'valid': True, 'message': '', 'normalized': value}
 
     def _setup_agent_instance(self):
         """Set up the agent's current instance using the user's application data"""
@@ -740,6 +902,7 @@ class LoanAssistant:
         self.conversation_state = ConversationState.GREETING
         self.current_field = None
         self.field_attempts = {}
+        self.show_what_if_lab = False
         return "Great! Let's start a new loan application. Hi! I'm your loan application assistant. Would you like to start your loan application?"
 
     def get_conversation_state(self) -> Dict[str, Any]:

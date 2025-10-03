@@ -1,29 +1,123 @@
 
-# NLU module for SimCSE-based semantic similarity and intent extraction
+# NLU module for sentence-transformers-based semantic similarity and intent extraction
 import pandas as pd
 import os
+import numpy as np
 from constraints import L_SUPPORT_QUESTIONS_IDS, INTENT_TO_XAI_METHOD
+
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SentenceTransformer = None
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
 try:
     from simcse import SimCSE
+    SIMCSE_AVAILABLE = True
 except ImportError:
     SimCSE = None
+    SIMCSE_AVAILABLE = False
 
 class NLU:
-    def __init__(self, model_type="simcse", model_path=None):
+    def __init__(self, model_type="sentence_transformers", model_path=None):
         self.model_type = model_type
-        if model_type == "simcse":
-            if SimCSE is None:
-                raise ImportError("SimCSE not available. Install with: pip install simcse")
-            self.model = SimCSE("princeton-nlp/sup-simcse-roberta-large")
-            # Load dataset from questions directory
-            self.df = pd.read_csv(os.path.join(os.path.dirname(__file__), '..', 'data_questions', 'Median_4.csv'), index_col=0).drop_duplicates()
-            self.model.build_index(list(self.df['Question']))
-        else:
-            raise ValueError(f"Unsupported NLU model type: {model_type}. Only 'simcse' is supported.")
+        self.df = pd.read_csv(os.path.join(os.path.dirname(__file__), '..', 'data_questions', 'Median_4.csv'), index_col=0).drop_duplicates()
+        self.questions = list(self.df['Question'])
+
+        # Prefer sentence-transformers; use GPU if available, otherwise CPU (Streamlit Cloud has no GPU)
+        if model_type == "sentence_transformers":
+            if not SENTENCE_TRANSFORMERS_AVAILABLE:
+                print("⚠️ sentence-transformers not available, trying SimCSE...")
+                self.model_type = "simcse"
+            else:
+                try:
+                    import torch
+                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                except Exception:
+                    device = "cpu"
+                # Lightweight, fast model for semantic similarity
+                self.model = SentenceTransformer('all-MiniLM-L6-v2', device=device)
+                print(f"✅ Loaded sentence-transformers model on {device}")
+                # Pre-compute embeddings for all questions
+                self.question_embeddings = self.model.encode(self.questions, convert_to_numpy=True, show_progress_bar=False)
+                print(f"✅ Pre-computed embeddings for {len(self.questions)} questions")
+
+        # Optional SimCSE fallback for legacy envs
+        if self.model_type == "simcse" or (model_type == "sentence_transformers" and not SENTENCE_TRANSFORMERS_AVAILABLE):
+            if not SIMCSE_AVAILABLE:
+                print("⚠️ SimCSE not available, falling back to simple keyword matching")
+                self.model_type = "fallback"
+                self.model = None
+            else:
+                self.model = SimCSE("princeton-nlp/sup-simcse-roberta-large")
+                self.model.build_index(self.questions)
+                self.model_type = "simcse"
+
+        elif model_type == "fallback":
+            self.model = None
+        elif self.model_type not in {"sentence_transformers", "simcse", "fallback"}:
+            raise ValueError(f"Unsupported NLU model type: {model_type}. Supported: 'sentence_transformers', 'simcse', 'fallback'")
 
     def classify_intent(self, user_input, top_k=5):
-        # Dynamic, model-driven intent extraction using SimCSE
-        if self.model_type == "simcse":
+        # Dynamic, model-driven intent extraction
+        # Fast keyword heuristics ensure clear phrases immediately map to an XAI method
+        try:
+            text = (user_input or "").lower()
+            # Heuristics for common phrasing
+            rule_keywords = ["rule-based", "rule based", "rules", "conditions", "if then", "anchor"]
+            shap_keywords = ["feature", "importance", "impact", "influence", "contribute", "shap", "why", "explain", "decision", "factors", "affected"]
+            dice_keywords = ["what if", "counterfactual", "change", "modify", "different", "should i", "how to get"]
+            if any(k in text for k in rule_keywords):
+                return {
+                    'intent': 'anchor',
+                    'label': None,
+                    'confidence': 0.95,
+                    'matched_question': "Provide a simple rule-based explanation for this decision."
+                }, 0.95, []
+            if any(k in text for k in shap_keywords):
+                return {
+                    'intent': 'shap',
+                    'label': None,
+                    'confidence': 0.9,
+                    'matched_question': "Which features were most important for this prediction?"
+                }, 0.9, []
+            if any(k in text for k in dice_keywords):
+                return {
+                    'intent': 'dice',
+                    'label': None,
+                    'confidence': 0.9,
+                    'matched_question': "How should the instance be changed to get a different prediction?"
+                }, 0.9, []
+        except Exception:
+            pass
+
+        # sentence-transformers path
+        if self.model_type == "sentence_transformers" and hasattr(self, 'question_embeddings'):
+            try:
+                query_emb = self.model.encode([user_input], convert_to_numpy=True, show_progress_bar=False)[0]
+                # Cosine similarity
+                q_norm = np.linalg.norm(self.question_embeddings, axis=1) + 1e-12
+                u_norm = np.linalg.norm(query_emb) + 1e-12
+                sims = (self.question_embeddings @ query_emb) / (q_norm * u_norm)
+                # Top-k indices
+                top_idx = np.argsort(-sims)[:top_k]
+                match_question = self.questions[top_idx[0]]
+                score = float(sims[top_idx[0]])
+                label = self.df.iloc[top_idx[0]]['Label']
+                xai_method = self.map_label_to_xai_method(label)
+                suggestions = [self.questions[i] for i in top_idx]
+                return {
+                    'intent': xai_method,
+                    'label': label,
+                    'confidence': score,
+                    'matched_question': match_question
+                }, score, suggestions
+            except Exception as e:
+                print(f"sentence-transformers classify failed: {e}")
+
+        # Legacy SimCSE path
+        if self.model_type == "simcse" and self.model is not None:
             # Always get top matches without initial threshold filtering
             match_results = self.model.search(user_input, threshold=0, top_k=top_k)
             
@@ -46,8 +140,12 @@ class NLU:
                     'confidence': normalized_confidence,
                     'matched_question': match_question
                 }, normalized_confidence, []
+        
+        # Fallback to simple keyword matching when SimCSE is not available
+        elif self.model_type == "fallback" or self.model is None:
+            return self._fallback_classify_intent(user_input, top_k)
             
-            # No matches found at all
+        # No matches found at all
             return 'unknown', 0.0, []
         else:
             return 'unknown', 0.0, []
@@ -67,8 +165,21 @@ class NLU:
             print(f"🧠 Intent classifier (fallback): {intent_result}")
             return intent_result
         
-        # FALLBACK 2: Try SimCSE if available
-        if hasattr(self, 'model') and self.model is not None:
+        # FALLBACK 2: Try embedding search if available (ST first, then SimCSE)
+        if self.model_type == "sentence_transformers" and hasattr(self, 'question_embeddings'):
+            try:
+                query_emb = self.model.encode([user_input], convert_to_numpy=True, show_progress_bar=False)[0]
+                q_norm = np.linalg.norm(self.question_embeddings, axis=1) + 1e-12
+                u_norm = np.linalg.norm(query_emb) + 1e-12
+                sims = (self.question_embeddings @ query_emb) / (q_norm * u_norm)
+                best_idx = int(np.argmax(sims))
+                match_question = self.questions[best_idx]
+                print(f"🔍 ST match (last resort): {match_question}")
+                return match_question
+            except Exception as e:
+                print(f"ST search failed: {e}")
+
+        if hasattr(self, 'model') and self.model_type == "simcse" and self.model is not None:
             try:
                 threshold = 0.6
                 match_results = self.model.search(user_input, threshold=threshold)

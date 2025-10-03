@@ -36,16 +36,28 @@ class AppConfig:
     
     def _get_version(self):
         """Get version from command line or environment"""
-        # Check command line arguments
         import sys
+        # 1) Environment variable takes precedence
+        env_version = os.getenv('HICXAI_VERSION')
+        if env_version in {"v0", "v1"}:
+            return env_version
+
+        # 2) Explicit CLI flags (avoid accidental '--version')
         if len(sys.argv) > 1:
             for arg in sys.argv[1:]:
-                if arg.startswith('--v'):
-                    return arg[2:]  # Remove '--' prefix
-        
-        # Check environment variable
-        version = os.getenv('HICXAI_VERSION', 'v0')
-        return version
+                if arg in ("--v0", "--v1"):
+                    return arg[2:]
+                if arg.startswith("--HICXAI_VERSION="):
+                    cand = arg.split("=", 1)[1].strip()
+                    if cand in {"v0", "v1"}:
+                        return cand
+                if arg.startswith("--ab="):
+                    cand = arg.split("=", 1)[1].strip()
+                    if cand in {"v0", "v1"}:
+                        return cand
+
+        # 3) Default
+        return "v0"
     
     def _generate_session_id(self):
         """Generate unique session ID for concurrent user tracking"""

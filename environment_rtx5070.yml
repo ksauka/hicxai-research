@@ -1,0 +1,40 @@
+name: hicxai_rtx5070
+channels:
+  - conda-forge
+  - nvidia
+  - pytorch
+dependencies:
+  - python=3.10.12
+  - cuda-toolkit=12.1.1
+  - jupyterlab
+  - pip=24.0
+  - pandas>=2.0.0
+  - matplotlib>=3.7.0
+  - numpy>=1.24.0
+  - scipy>=1.10.0
+  - scikit-learn>=1.3.0
+  - spacy>=3.6.0
+  - graphviz
+  - pip:
+    # Modern Streamlit and web interface
+    - streamlit>=1.28.0
+    # NOTE: Install PyTorch separately with: pip install -r requirements_rtx5070_torch.txt
+    # Modern transformers and NLP (install after PyTorch)
+    - transformers>=4.35.0
+    - sentence-transformers>=2.7.0
+    # Replace SimCSE with sentence-transformers approach
+    # - simcse==0.4  # Remove this - will use sentence-transformers directly
+    # XAI libraries - updated versions
+    - shap>=0.43.0
+    - dice-ml>=0.10.0
+    - anchor-exp>=0.0.2
+  - dtreeviz>=2.2.2
+    # Additional ML utilities
+    - datasets>=2.14.0
+    - evaluate>=0.4.0
+    - accelerate>=0.24.0
+    - requests>=2.31.0
+    - protobuf>=4.21.0
+    # Development tools
+    - pytest>=7.0.0
+    - black>=23.0.0

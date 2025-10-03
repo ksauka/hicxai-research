@@ -1,4 +1,167 @@
 """
+Natural conversation helpers for v1: optional GPT paraphrasing (gpt-4o-mini by default).
+
+Behavior:
+- If OPENAI_API_KEY is set (via env or Streamlit Secrets) and HICXAI_GENAI is not 'off',
+    use OpenAI to rewrite explanations in the selected style (HICXAI_STYLE: short|detailed|actionable).
+- Otherwise, return the original text unchanged.
+
+Notes:
+- Keep outputs faithful: do not invent numbers or facts; preserve lists and key points.
+- This module is optional. LoanAssistant guards imports accordingly.
+"""
+from __future__ import annotations
+
+import os
+from typing import Any, Dict, Optional
+
+# Try to import streamlit to fetch secrets when running on Streamlit Cloud
+try:
+    import streamlit as st  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    st = None  # type: ignore
+
+
+def _should_use_genai() -> bool:
+    if os.getenv("HICXAI_GENAI", "on").lower() in {"0", "false", "off"}:
+        return False
+    # Allow pulling key from Streamlit Secrets when not present in env
+    if not os.getenv("OPENAI_API_KEY") and st is not None:
+        try:
+            key = st.secrets.get("OPENAI_API_KEY", None)  # type: ignore[attr-defined]
+            if key:
+                os.environ["OPENAI_API_KEY"] = str(key)
+        except Exception:
+            pass
+    return bool(os.getenv("OPENAI_API_KEY"))
+
+
+def _get_openai_client():
+    """Return an OpenAI client configured from environment/Streamlit secrets.
+
+    Honors optional base URL (HICXAI_OPENAI_BASE_URL or OPENAI_BASE_URL) for proxies.
+    """
+    # Ensure key loaded from st.secrets if available
+    _ = _should_use_genai()
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    base_url = (
+        os.environ.get("HICXAI_OPENAI_BASE_URL")
+        or os.environ.get("OPENAI_BASE_URL")
+        or None
+    )
+    # Prefer OpenAI SDK v1.x
+    try:
+        from openai import OpenAI  # type: ignore
+        if base_url:
+            return OpenAI(api_key=api_key, base_url=base_url)
+        return OpenAI(api_key=api_key)
+    except Exception:
+        # Legacy SDK fallback will be handled in enhance_response
+        return None
+
+
+def _build_system_prompt(style: str) -> str:
+    base = (
+        "You are Luna, a friendly AI loan assistant. Rephrase the provided explanation "
+        "to be clear, warm, and helpful while preserving all factual content, numbers, and lists. "
+        "Do not fabricate data. Do not change numeric values. Avoid hedging."
+    )
+    if style == "short":
+        base += " Be concise (2-4 sentences)."
+    elif style == "actionable":
+        base += " Highlight 2-3 concrete next steps or changes a user can make."
+    else:  # detailed
+        base += " Provide a clear, well-structured explanation (short paragraphs or bullets)."
+    return base
+
+
+def _compose_messages(response: str, context: Optional[Dict[str, Any]], style: str):
+    sys_prompt = _build_system_prompt(style)
+    ctx_lines = []
+    if context:
+        for k, v in context.items():
+            if v is None:
+                continue
+            ctx_lines.append(f"- {k}: {v}")
+    ctx_blob = "\n".join(ctx_lines) if ctx_lines else "(no extra context)"
+
+    user_prompt = (
+        "Rewrite the following explanation for the end user. Preserve all factual content and numbers.\n\n"
+        f"Context:\n{ctx_blob}\n\n"
+        f"Original Explanation:\n{response}\n\n"
+        "Return only the rewritten explanation text."
+    )
+    return [
+        {"role": "system", "content": sys_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
+def enhance_response(response: str, context: Optional[Dict[str, Any]] = None, response_type: str = "explanation") -> str:
+    """Optionally paraphrase an explanation using OpenAI (gpt-4o-mini by default).
+
+    If OpenAI is not configured, returns the original response unchanged.
+    Style is controlled via HICXAI_STYLE: short | detailed | actionable.
+    """
+    if not response or not isinstance(response, str):
+        return response
+
+    if not _should_use_genai():
+        return response
+
+    style = os.getenv("HICXAI_STYLE", "detailed").strip().lower()
+    try:
+        # Preferred path: OpenAI SDK v1.x
+        client = _get_openai_client()
+        messages = _compose_messages(response, context, style)
+        model_name = os.getenv("HICXAI_OPENAI_MODEL", "gpt-4o-mini")
+        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.2"))
+        max_tokens = int(os.getenv("HICXAI_MAX_TOKENS", "300"))
+
+        if client is not None:
+            try:
+                completion = client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                content = completion.choices[0].message.content if completion and completion.choices else None
+                return content or response
+            except Exception:
+                pass
+
+        # Fallback: legacy openai SDK
+        try:
+            import openai  # type: ignore
+            openai.api_key = os.environ.get("OPENAI_API_KEY")
+            # Support optional base URL on legacy sdk too
+            base_url = (
+                os.environ.get("HICXAI_OPENAI_BASE_URL")
+                or os.environ.get("OPENAI_BASE_URL")
+                or None
+            )
+            if base_url:
+                try:
+                    openai.base_url = base_url  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            completion = openai.ChatCompletion.create(
+                model=model_name,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            content = completion["choices"][0]["message"]["content"] if completion else None
+            return content or response
+        except Exception:
+            return response
+    except Exception:
+        # Never break the app if the API call fails
+        return response
+"""
 Natural Language Generation Module using Ollama
 Makes conversations more natural while staying strictly within system constraints
 """

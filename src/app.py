@@ -343,10 +343,112 @@ with st.sidebar:
             st.session_state.loan_assistant = LoanAssistant(agent)
             st.session_state.chat_history = []
             st_rerun()
+
+    # v1: Explanation style selector (applies to generative rewriter where available)
+    if config.version == 'v1':
+        st.markdown("---")
+        st.markdown("**Explanation Style (v1)**")
+        style = st.selectbox(
+            "Tone and detail",
+            options=["detailed", "short", "actionable"],
+            index=0,
+            help="Choose how Luna summarizes SHAP/DiCE results."
+        )
+        # Make available to the backend via env var
+        os.environ["HICXAI_STYLE"] = style
     
     # A/B Testing Debug Info (only for development/testing - hidden from users)
     # Uncomment the lines below only when debugging A/B testing locally
     # if config.show_debug_info and os.getenv('HICXAI_DEBUG_MODE', 'false').lower() == 'true':
+    # What‑if Lab (V1 only, shown after user asks what-if)
+    if config.version == 'v1' and getattr(st.session_state.loan_assistant, 'show_what_if_lab', False):
+        st.markdown("---")
+        st.subheader("🧪 What‑if Lab")
+        st.caption("Adjust inputs to see how the predicted probability changes.")
+
+        # Prepare a baseline instance from current app state if available
+        app_state = st.session_state.loan_assistant.application
+        def default(v, fallback):
+            return v if v is not None else fallback
+
+        # Core numerics
+        age = st.slider("Age", min_value=17, max_value=90, value=int(default(app_state.age, 35)))
+        hours = st.slider("Hours per week", min_value=1, max_value=99, value=int(default(app_state.hours_per_week, 40)))
+        gain = st.number_input("Capital Gain", min_value=0, max_value=99999, step=100, value=int(default(app_state.capital_gain, 0)))
+        loss = st.number_input("Capital Loss", min_value=0, max_value=4356, step=50, value=int(default(app_state.capital_loss, 0)))
+
+        # Categorical selectors using known field options
+        edu = st.selectbox("Education", options=field_options['education'], index=field_options['education'].index(default(app_state.education, 'HS-grad')))
+        occ = st.selectbox("Occupation", options=field_options['occupation'], index=field_options['occupation'].index(default(app_state.occupation, 'Sales')))
+        workclass = st.selectbox("Workclass", options=field_options['workclass'], index=field_options['workclass'].index(default(app_state.workclass, 'Private')))
+        marital = st.selectbox("Marital Status", options=field_options['marital_status'], index=field_options['marital_status'].index(default(app_state.marital_status, 'Never-married')))
+        relationship = st.selectbox("Relationship", options=field_options['relationship'], index=field_options['relationship'].index(default(app_state.relationship, 'Not-in-family')))
+        sex = st.selectbox("Sex", options=field_options['sex'], index=field_options['sex'].index(default(app_state.sex, 'Male')))
+        race = st.selectbox("Race", options=field_options['race'], index=field_options['race'].index(default(app_state.race, 'White')))
+        country = st.selectbox("Native Country", options=field_options['native_country'], index=field_options['native_country'].index(default(app_state.native_country, 'United-States')))
+
+        # Build a hypothetical instance and predict
+        try:
+            # Start from existing application dict (fill minimal defaults)
+            hypo = app_state.to_dict()
+            hypo['age'] = age
+            hypo['hours_per_week'] = hours
+            hypo['education'] = edu
+            hypo['occupation'] = occ
+            hypo['workclass'] = workclass
+            hypo['marital_status'] = marital
+            hypo['relationship'] = relationship
+            hypo['sex'] = sex
+            hypo['race'] = race
+            hypo['native_country'] = country
+            hypo['capital_gain'] = gain
+            hypo['capital_loss'] = loss
+            if hypo.get('education_num') is None:
+                edu_map = {
+                    'Preschool': 1, '1st-4th': 2, '5th-6th': 3, '7th-8th': 4, '9th': 5,
+                    '10th': 6, '11th': 7, '12th': 8, 'HS-grad': 9, 'Some-college': 10,
+                    'Assoc-voc': 11, 'Assoc-acdm': 12, 'Bachelors': 13, 'Masters': 14,
+                    'Prof-school': 15, 'Doctorate': 16
+                }
+                hypo['education_num'] = edu_map.get(edu, 9)
+            # Ensure required fields have plausible defaults
+            hypo.setdefault('workclass', 'Private')
+            hypo.setdefault('marital_status', 'Never-married')
+            hypo.setdefault('relationship', 'Not-in-family')
+            hypo.setdefault('race', 'White')
+            hypo.setdefault('sex', 'Male')
+            hypo.setdefault('capital_gain', 0)
+            hypo.setdefault('capital_loss', 0)
+            hypo.setdefault('native_country', 'United-States')
+
+            import pandas as pd
+            app_df = pd.DataFrame([hypo])
+            app_df['income'] = '<=50K'  # dummy
+            from preprocessing import preprocess_adult
+            processed = preprocess_adult(app_df)
+            X = processed.drop('income', axis=1)
+            # Align with training features
+            train_df = pd.concat([agent.data['X_display'], agent.data['y_display']], axis=1)
+            train_df_processed = preprocess_adult(train_df)
+            expected = train_df_processed.drop('income', axis=1).columns.tolist()
+            for col in expected:
+                if col not in X.columns:
+                    X[col] = 0
+            X = X[expected]
+            # Predict probability if available
+            prob = None
+            if hasattr(agent.clf_display, 'predict_proba'):
+                p = agent.clf_display.predict_proba(X)
+                # Assume class index 1 corresponds to '>50K'
+                prob = float(p[0][1]) if p.shape[1] > 1 else float(p[0][0])
+            st.metric(label="Estimated P(>50K)", value=f"{(prob if prob is not None else 0.5)*100:.1f}%")
+
+            # Optional: refresh SHAP visuals for hypo profile (textual SHAP for now)
+            # We keep visuals in the main flow; here we just indicate changes
+            st.caption("Adjust inputs to explore their impact. Use chat for detailed explanations and visuals.")
+        except Exception as e:
+            st.caption(f"What‑if Lab unavailable: {e}")
+    # Otherwise, no What‑if panel is shown until triggered by user
     #     st.markdown("---")
     #     st.markdown("**🧪 Debug Info**")
     #     st.markdown(f"Version: **{config.version}**")
@@ -396,21 +498,20 @@ if len(st.session_state.chat_history) == 0:
     st.session_state.chat_history.append((None, welcome_msg))
     st_rerun()
 
-# Chat input
-col1, col2 = st.columns([5, 1])
+# Chat input (form enables Enter-to-send and clears on submit automatically)
+# Check if current field has clickable options for placeholder
+current_field = getattr(st.session_state.loan_assistant, 'current_field', None)
+if current_field and current_field in field_options:
+    placeholder_text = "💬 Type your answer or use the clickable buttons below..."
+else:
+    placeholder_text = "Type your message to Luna..."
 
-with col1:
-    # Check if current field has clickable options
-    current_field = getattr(st.session_state.loan_assistant, 'current_field', None)
-    if current_field and current_field in field_options:
-        placeholder_text = "💬 Type your answer or use the clickable buttons below..."
-    else:
-        placeholder_text = "Type your message to Luna..."
-    
-    user_message = st.text_input("Message to Luna", key="user_input", placeholder=placeholder_text, label_visibility="collapsed")
-
-with col2:
-    send_button = st.button("Send", key="send_button", use_container_width=True)
+with st.form("chat_form", clear_on_submit=True):
+    col1, col2 = st.columns([5, 1])
+    with col1:
+        user_message = st.text_input("Message to Luna", key="user_input", placeholder=placeholder_text, label_visibility="collapsed")
+    with col2:
+        send_button = st.form_submit_button("Send", use_container_width=True)
 
 # Add helper text for clickable features
 if current_field and current_field in field_options:
@@ -465,18 +566,7 @@ if current_field and current_field in field_options:
 if send_button and user_message:
     # Handle the message through loan assistant
     assistant_response = st.session_state.loan_assistant.handle_message(user_message)
-    
-    # Check if this was a SHAP-related query and we should show visualizations
-    if (config.show_shap_visualizations and 
-        any(keyword in user_message.lower() for keyword in ['shap', 'feature', 'factor', 'importance', 'affect', 'decision']) and
-        hasattr(st.session_state.loan_assistant, 'last_shap_result') and 
-        st.session_state.loan_assistant.last_shap_result):
-        
-        # Display SHAP visualizations
-        shap_data = st.session_state.loan_assistant.last_shap_result
-        assistant_response += "\n\n" + display_shap_explanation(shap_data)
-    
-    # Add to chat history
+    # Add to chat history (form clears input on submit)
     st.session_state.chat_history.append((user_message, assistant_response))
     st_rerun()
 
@@ -485,20 +575,19 @@ if 'option_clicked' in st.session_state and st.session_state.option_clicked:
     option_value = st.session_state.option_clicked
     assistant_response = st.session_state.loan_assistant.handle_message(option_value)
     
-    # Check if this was a SHAP-related query and we should show visualizations
-    if (config.show_shap_visualizations and 
-        any(keyword in option_value.lower() for keyword in ['shap', 'feature', 'factor', 'importance', 'affect', 'decision']) and
-        hasattr(st.session_state.loan_assistant, 'last_shap_result') and 
-        st.session_state.loan_assistant.last_shap_result):
-        
-        # Display SHAP visualizations
-        shap_data = st.session_state.loan_assistant.last_shap_result
-        assistant_response += "\n\n" + display_shap_explanation(shap_data)
-    
     # Add to chat history
     st.session_state.chat_history.append((option_value, assistant_response))
     st.session_state.option_clicked = None  # Reset
     st_rerun()
+
+# Persistent SHAP visuals section (V1 only): render when results exist
+if config.version == 'v1' and config.show_shap_visualizations:
+    shap_data = getattr(st.session_state.loan_assistant, 'last_shap_result', None)
+    if shap_data:
+        st.markdown("---")
+        st.subheader("🔎 Visual Explanations")
+        display_shap_explanation(shap_data)
+        explain_shap_visualizations()
 
 # Quick reply buttons based on current state
 st.markdown("---")
@@ -548,7 +637,12 @@ elif current_state == 'complete':
             st_rerun()
     with col3:
         if st.button("🔧 What If Analysis", key="quick_whatif"):
-            response = "I can help you explore what-if scenarios! Try asking: 'What if my age was 35?' or 'What if I had a different education level?'"
+            # Turn on What‑if Lab and prompt guidance
+            try:
+                st.session_state.loan_assistant.show_what_if_lab = True
+            except Exception:
+                pass
+            response = "What‑if Lab enabled in the sidebar. Adjust Age, Hours, Education, or Occupation to see how the probability changes."
             st.session_state.chat_history.append(("what if analysis", response))
             st_rerun()
 
@@ -621,7 +715,9 @@ if current_state == 'complete':
                 hasattr(st.session_state.loan_assistant, 'last_shap_result') and 
                 st.session_state.loan_assistant.last_shap_result):
                 shap_data = st.session_state.loan_assistant.last_shap_result
-                response += "\n\n" + display_shap_explanation(shap_data)
+                # Render visuals in the UI (function returns None), do not append to text
+                display_shap_explanation(shap_data)
+                explain_shap_visualizations()
             
             st.session_state.chat_history.append((query, response))
             st_rerun()

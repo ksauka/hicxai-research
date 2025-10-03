@@ -39,7 +39,7 @@ class Agent:
         elif os.path.exists(config_path):
             with open(config_path, 'r') as f:
                 nlu_config = json.load(f)
-            self.nlu_model = NLU(model_type=nlu_config.get('model_type', 'simcse'), model_path=nlu_config.get('model_path'))
+            self.nlu_model = NLU(model_type=nlu_config.get('model_type', 'sentence_transformers'), model_path=nlu_config.get('model_path'))
         else:
             self.nlu_model = NLU()
 
@@ -89,8 +89,22 @@ class Agent:
         os.makedirs(model_dir, exist_ok=True)
         model_path = os.path.join(model_dir, 'RandomForest.pkl')
         if os.path.exists(model_path):
-            self.clf = pickle.load(open(model_path, 'rb'))
-            self.clf_display = self.clf
+            try:
+                self.clf = pickle.load(open(model_path, 'rb'))
+                self.clf_display = self.clf
+            except Exception as e:
+                print(f"⚠️ Failed to load existing model ({e}). Retraining...")
+                from preprocessing import preprocess_adult
+                df = pd.concat([self.data['X_display'], self.data['y_display']], axis=1)
+                df_clean = preprocess_adult(df)
+                X = df_clean.drop('income', axis=1)
+                y = df_clean['income']
+                from sklearn.ensemble import RandomForestClassifier
+                clf = RandomForestClassifier(n_estimators=200, random_state=42)
+                clf.fit(X, y)
+                self.clf = clf
+                self.clf_display = clf
+                pickle.dump(clf, open(model_path, 'wb'))
         else:
             from preprocessing import preprocess_adult
             df = pd.concat([self.data['X_display'], self.data['y_display']], axis=1)
