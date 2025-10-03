@@ -1,15 +1,11 @@
-# Minimal CPU-only requirements for Streamlit Cloud
-streamlit>=1.28.0
-pandas>=2.0.0
-scikit-learn>=1.3.0
-matplotlib>=3.7.0
-sentence-transformers>=2.7.0
-transformers>=4.35.0
-numpy>=1.24.0
-shap>=0.43.0
-dice-ml>=0.10.0
+streamlit>=1.31.0
+pandas>=2.2.0
+numpy>=2.0.0
+scikit-learn>=1.5.0
+matplotlib>=3.8.0
+shap>=0.45.0
 anchor-exp>=0.0.2
-dtreeviz>=2.2.2
+Dice-ML>=0.10.0
 graphviz>=0.20.3
-openai>=1.0.0,<2.0.0# Streamlit Cloud uses this by default; local dev should use environment_rtx5070.yml + requirements_rtx5070_torch.txt
--r requirements-streamlit.txt
+dtreeviz>=2.2.2
+openai>=1.0.0,<2.0.0

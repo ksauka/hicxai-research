@@ -74,8 +74,8 @@ This work builds upon and adapts components from:
    GITHUB_REPO = "yourusername/your-private-data-repo"
 
 3. **Environment & Python Version**
-   - This repo includes `runtime.txt` (3.10) to avoid Python 3.13/build issues on Cloud (distutils removal).
-   - If Cloud asks for a requirements file, point it to `requirements-streamlit.txt` for a CPU-friendly set.
+   - Cloud installs from `requirements.txt` (CPU-friendly set compatible with Python 3.13).
+   - Local development can keep a richer toolchain (Poetry, CUDA, etc.) without affecting Cloud; `pyproject.toml` and `poetry.lock` are ignored by git.
    ```
 
 ## Feedback
