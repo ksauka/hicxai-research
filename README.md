@@ -1,14 +1,35 @@
 # HicXAI Research Platform
 
-A Human-Computer Interaction research platform for studying user needs and preferences in explainable AI (XAI) for sensitive domains. This project investigates how different explanation modalities affect user trust and decision-making in AI-assisted financial services.
+A Human-Computer Interaction research platform for studying user needs and preferences in explainable AI (XAI) for sensitive domains. This project implements a **3×2 factorial experiment** investigating how different explanation modalities and interface anthropomorphism affect user trust and decision-making in AI-assisted financial services.
 
-## Research Objectives
+## Experimental Design (3×2 Factorial)
 
-This platform conducts user studies on:
-- **User preferences** for different XAI explanation types
-- **Trust calibration** in AI explanations for sensitive financial decisions  
-- **Effectiveness** of anthropomorphic vs. minimal AI assistant interfaces
-- **UX design patterns** for explainable AI in high-stakes domains
+**Factor 1 - Explanation Type (3 levels):**
+- `none` - No explanations provided
+- `counterfactual` - DiCE counterfactual explanations only
+- `feature_importance` - SHAP feature importance visualizations only
+
+**Factor 2 - Anthropomorphism (2 levels):**
+- `low` - Minimal, technical AI assistant
+- `high` - Luna with friendly, conversational tone and avatar
+
+**6 Experimental Conditions:**
+| Condition | Explanation | Anthropomorphism | App Entry Point | Condition Code |
+|-----------|-------------|------------------|-----------------|----------------|
+| 1 | none | low | `app_v0.py` | `E_none_A_low` |
+| 2 | none | high | `app_condition_2.py` | `E_none_A_high` |
+| 3 | counterfactual | low | `app_condition_3.py` | `E_cf_A_low` |
+| 4 | counterfactual | high | `app_condition_4.py` | `E_cf_A_high` |
+| 5 | feature_importance | low | `app_condition_5.py` | `E_shap_A_low` |
+| 6 | feature_importance | high | `app_v1.py` | `E_shap_A_high` |
+
+## Research Questions
+
+This platform investigates:
+- **RQ1**: How do different explanation types (none, counterfactual, feature importance) affect user trust and understanding?
+- **RQ2**: How does anthropomorphism (low vs. high) influence user perception of AI explanations?
+- **RQ3**: Are there interaction effects between explanation type and anthropomorphism?
+- **RQ4**: Which combination optimizes user trust calibration in high-stakes financial decisions?
 
 ## Attribution & Acknowledgments
 
@@ -20,14 +41,21 @@ This work builds upon and adapts components from:
 
 ## Key Research Contributions
 
-### 1. A/B Testing Framework
-- **Control Group (v0)**: Minimal AI assistant interface
-- **Treatment Group (v1)**: Anthropomorphic "Luna" assistant with SHAP visualizations
-- Concurrent deployment system for randomized user assignment
+### 1. Full Factorial Experimental Design
+- **3×2 factorial design** with 6 experimental conditions
+- **Clean factor isolation**: Explanation type and anthropomorphism are independently manipulated
+- **Condition tracking**: Each session logged with unique ID including condition code (e.g., `E_cf_A_high_1732612345_a1b2c3d4`)
+- **Concurrent deployment**: Multiple Streamlit Cloud apps for balanced randomized assignment
 
-### 2. Human-Centered Design
-- **Fuzzy matching** for natural language query understanding
+### 2. Controlled XAI Comparison
+- **Counterfactual explanations** (DiCE): "What changes would lead to approval?"
+- **Feature importance** (SHAP): Visual bar charts showing factor contributions
+- **No explanations baseline**: Control condition for measuring explanation value
+
+### 3. Human-Centered Design
+- **Fuzzy matching** for natural language query understanding via sentence-transformers
 - **Conversational UI** in Streamlit for accessible user interaction
+- **Adaptive interface**: UI elements shown/hidden based on experimental condition
 - **Optional feedback collection** with privacy-preserving data handling
 
 
@@ -38,37 +66,59 @@ This work builds upon and adapts components from:
 1. **Setup Environment**
    ```bash
    # Activate the conda environment
+   conda activate hicxai_rtx5070
+   # or
    conda activate xagent
    
    # Navigate to project directory
    cd /path/to/hicxai-research
    ```
 
-2. **Run A/B Testing Locally**
+2. **Run Specific Experimental Conditions Locally**
    ```bash
-   # Control Group (v0) - Minimal interface
+   # Condition 1: No explanations, low anthropomorphism (v0)
    streamlit run app_v0.py --server.port 8501
 
-   # Treatment Group (v1) - Luna with SHAP visualizations
-   # Tip: enable full visualizations locally
-   HICXAI_MODE=full streamlit run app_v1.py --server.port 8502
+   # Condition 2: No explanations, high anthropomorphism (Luna)
+   streamlit run app_condition_2.py --server.port 8502
+
+   # Condition 3: Counterfactual only, low anthropomorphism
+   streamlit run app_condition_3.py --server.port 8503
+
+   # Condition 4: Counterfactual only, high anthropomorphism (Luna + DiCE)
+   streamlit run app_condition_4.py --server.port 8504
+
+   # Condition 5: SHAP only, low anthropomorphism
+   streamlit run app_condition_5.py --server.port 8505
+
+   # Condition 6: SHAP only, high anthropomorphism (Luna + SHAP) - v1
+   streamlit run app_v1.py --server.port 8506
    ```
 
-   Note: The entrypoints `app_v0.py` and `app_v1.py` force their respective versions regardless of environment variables. When running `src/app.py` directly, the `HICXAI_VERSION` environment variable takes precedence over CLI args; default is v0.
+   **Or use environment variables directly:**
+   ```bash
+   HICXAI_EXPLANATION=counterfactual HICXAI_ANTHRO=high streamlit run src/app.py
+   ```
+
+   Note: Entry point files (`app_v0.py`, `app_v1.py`, `app_condition_*.py`) force their respective conditions regardless of environment variables.
 
 3. **Access Local Apps**
-   - **Control Group**: http://localhost:8501
-   - **Treatment Group**: http://localhost:8502
+   - Open browser to the appropriate port (8501-8506)
 
 ### Cloud Deployment (Streamlit Cloud)
 
-1. **Create Apps**
+1. **Create 6 Separate Apps** (one per condition)
    - Go to https://streamlit.io/cloud
-   - Create app with repository: `ksauka/hicxai-research`
-   - For Control: Use `app_v0.py` as main file
-   - For Treatment: Use `app_v1.py` as main file
+   - Create 6 apps with repository: `ksauka/hicxai-research`
+   - Use corresponding entry points:
+     - **Condition 1** (E_none_A_low): `app_v0.py`
+     - **Condition 2** (E_none_A_high): `app_condition_2.py`
+     - **Condition 3** (E_cf_A_low): `app_condition_3.py`
+     - **Condition 4** (E_cf_A_high): `app_condition_4.py`
+     - **Condition 5** (E_shap_A_low): `app_condition_5.py`
+     - **Condition 6** (E_shap_A_high): `app_v1.py`
 
-2. **Configure Secrets** (optional, per app)
+2. **Configure Secrets** (optional, per app - same for all 6 apps)
    Add only what you use:
    ```toml
    # Optional: generative rewriter
@@ -82,9 +132,14 @@ This work builds upon and adapts components from:
    ```
 
 3. **Environment & Python Version**
-   - Cloud installs from `requirements.txt` only (CPU-friendly, Python 3.13 compatible).
-   - Apt packages from `packages.txt` are installed automatically (includes `graphviz`).
-   - Local GPU tooling is optional and does not affect Cloud.
+   - Cloud installs from `requirements.txt` only (CPU-friendly, Python 3.13 compatible)
+   - Apt packages from `packages.txt` are installed automatically (includes `graphviz`)
+   - Local GPU tooling is optional and does not affect Cloud
+
+4. **User Assignment Strategy**
+   - **Option A**: Manual assignment via Prolific/survey platform (redirect users to specific app URLs)
+   - **Option B**: Create a landing page/router that randomly assigns users to one of 6 app URLs
+   - Track condition code in session IDs for analysis
 
 ## Feedback
 - The app collects user feedback with conversational prompts. All fields are optional.
@@ -97,23 +152,34 @@ This work builds upon and adapts components from:
 4. **Ambiguity Handling**: Provides suggestions when user intent is unclear
 
 ## Key Components
-- `src/app.py`: Main Streamlit application with A/B testing logic
-- `src/ab_config.py`: A/B testing configuration and version control
+- `src/app.py`: Main Streamlit application with conditional rendering based on experimental factors
+- `src/ab_config.py`: 3×2 factorial configuration with factor-based feature flags
+- `src/loan_assistant.py`: Conversational flow manager with explanation routing
 - `src/nlu.py`: sentence-transformers semantic similarity and intent classification
 - `src/xai_methods.py`: Natural language explanation generation for SHAP, DiCE, Anchor
-- `src/shap_visualizer.py`: SHAP visualization components for treatment group
-- `src/github_saver.py`: Secure feedback collection to private repository
-- `app_v0.py` / `app_v1.py`: Streamlit Cloud deployment entry points
+- `src/shap_visualizer.py`: SHAP visualization components (shown only in `feature_importance` conditions)
+- `src/github_saver.py`: Secure feedback collection with condition tracking
+- `app_v0.py`, `app_v1.py`, `app_condition_2.py` through `app_condition_5.py`: Deployment entry points for each condition
 
 ## Configuration
 
-Environment variables used by the app:
-- `HICXAI_VERSION`: `v0` or `v1` (default `v0`). Also supported as CLI flags when running `src/app.py`: `--v0` / `--v1` or `--HICXAI_VERSION=v1` or `--ab=v1`.
-- `OPENAI_API_KEY`: enables optional generative rewriter.
-- `HICXAI_GENAI`: `on` (default) or `off` to disable the rewriter.
-- `HICXAI_OPENAI_MODEL`: defaults to `gpt-4o-mini`.
-- `HICXAI_OPENAI_BASE_URL` or `OPENAI_BASE_URL`: optional proxy/base URL for OpenAI SDK.
-- `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python`: optional workaround for protobuf issues.
+### Experimental Condition Variables (Primary)
+- `HICXAI_EXPLANATION`: `none` | `counterfactual` | `feature_importance` (determines which XAI method to show)
+- `HICXAI_ANTHRO`: `low` | `high` (determines assistant personality and interface style)
+
+### Legacy Variables (Backward Compatibility)
+- `HICXAI_VERSION`: `v0` or `v1` (maps to specific factor combinations)
+  - `v0` → `explanation=none`, `anthro=low`
+  - `v1` → `explanation=feature_importance`, `anthro=high`
+- CLI flags also supported: `--explanation=counterfactual --anthro=high` or `--v0` / `--v1`
+
+### Optional Features
+- `OPENAI_API_KEY`: enables optional generative rewriter for more natural explanations
+- `HICXAI_GENAI`: `on` (default) or `off` to disable the rewriter
+- `HICXAI_OPENAI_MODEL`: defaults to `gpt-4o-mini`
+- `HICXAI_STYLE`: `short` | `detailed` | `actionable` (explanation tone, configurable in high-anthro conditions)
+- `HICXAI_OPENAI_BASE_URL` or `OPENAI_BASE_URL`: optional proxy/base URL for OpenAI SDK
+- `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python`: optional workaround for protobuf issues
 
 ## Data & Assets
 

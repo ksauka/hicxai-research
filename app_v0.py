@@ -1,11 +1,15 @@
 """
-Entry point for V0 (Control Group) deployment
-Forces the app to run in V0 mode regardless of environment variables
+Entry point for Condition 1: E_none_A_low
+Explanation: none | Anthropomorphism: low
+Control baseline - no explanations, technical interface
 """
 import os
 import sys
 
-# Force V0 mode
+# Force Condition 1: No explanations + Low anthropomorphism
+os.environ['HICXAI_EXPLANATION'] = 'none'
+os.environ['HICXAI_ANTHRO'] = 'low'
+# Legacy compatibility
 os.environ['HICXAI_VERSION'] = 'v0'
 
 # Add src to path and run main app
