@@ -105,7 +105,7 @@ class LoanAssistant:
             'marital_status': ['Married-civ-spouse', 'Divorced', 'Never-married', 'Separated', 'Widowed', 'Married-spouse-absent', 'Married-AF-spouse'],
             'occupation': ['Tech-support','Craft-repair','Other-service','Sales','Exec-managerial','Prof-specialty','Handlers-cleaners','Machine-op-inspct','Adm-clerical','Farming-fishing','Transport-moving','Priv-house-serv','Protective-serv','Armed-Forces','?'],
             'sex': ['Male', 'Female'],
-            'race': ['White', 'Asian-Pac-Islander', 'Amer-Indian-Eskimo', 'Other', 'Black'],
+            'race': ['Black', 'Asian-Pac-Islander', 'Amer-Indian-Eskimo', 'White', 'Other'],
             'native_country': ['United-States', 'Cambodia', 'Canada', 'China', 'Columbia', 'Cuba', 'Dominican-Republic', 'Ecuador', 'El-Salvador', 'England', 'France', 'Germany', 'Greece', 'Guatemala', 'Haiti', 'Holand-Netherlands', 'Honduras', 'Hong', 'Hungary', 'India', 'Iran', 'Ireland', 'Italy', 'Jamaica', 'Japan', 'Laos', 'Mexico', 'Nicaragua', 'Outlying-US(Guam-USVI-etc)', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Puerto-Rico', 'Scotland', 'South', 'Taiwan', 'Thailand', 'Trinadad&Tobago', 'Vietnam', 'Yugoslavia', '?'],
             'relationship': ['Wife', 'Own-child', 'Husband', 'Not-in-family', 'Other-relative', 'Unmarried']
         }
@@ -474,9 +474,9 @@ class LoanAssistant:
             else:
                 formatted_explanation = str(explanation)
 
-            # Optional generative rewrite for v1 to make responses more natural
+            # Optional generative rewrite for high anthropomorphism to make responses more natural
             try:
-                if getattr(config, 'version', 'v0') == 'v1' and NATURAL_CONVERSATION_AVAILABLE:
+                if config.show_anthropomorphic and NATURAL_CONVERSATION_AVAILABLE:
                     context_info = {
                         'intent': intent_result.get('intent') if isinstance(locals().get('intent_result'), dict) else None,
                         'matched_question': locals().get('matched_question'),
@@ -486,13 +486,32 @@ class LoanAssistant:
             except Exception:
                 pass
             
-            return (f"{context_msg}**AI Explanation:**\n\n{formatted_explanation}\n\n"
-                   "Would you like another explanation or start a new application? "
-                   "You can ask questions like:\n"
-                   "• 'What should change to get approved?' (counterfactual)\n"
-                   "• 'Why was I denied/approved?' (feature importance)\n" 
-                   "• 'What are the simple rules?' (rule-based explanations)\n"
-                   "• 'New application' to start over")
+            # Humanize explanation for high anthropomorphism if not already done by LLM
+            if config.show_anthropomorphic:
+                # Make technical explanations more conversational
+                formatted_explanation = formatted_explanation.replace('SHAP Analysis:', 'Looking at your application,')
+                formatted_explanation = formatted_explanation.replace('the model predicted', 'I see that your income level is likely to be')
+                formatted_explanation = formatted_explanation.replace('increases the prediction probability', 'works in your favor')
+                formatted_explanation = formatted_explanation.replace('decreases the prediction probability', 'works against you')
+                formatted_explanation = formatted_explanation.replace('The most important factors are:', 'here are the key factors I considered:')
+                formatted_explanation = formatted_explanation.replace('For the current instance,', 'Based on what you\'ve told me,')
+            
+            # Format response based on anthropomorphism level
+            if config.show_anthropomorphic:
+                # High anthropomorphism: Warm, conversational
+                return (f"{context_msg}💡 **Here's what I found:**\n\n{formatted_explanation}\n\n"
+                       "Would you like me to explain anything else, or shall we start a fresh application? 😊\n\n"
+                       "Feel free to ask:\n"
+                       "• 'What if I changed my situation?' 🔄\n"
+                       "• 'Why did I get this result?' 🎯\n" 
+                       "• 'What are the key requirements?' 📋\n"
+                       "• 'Start fresh' to begin a new application")
+            else:
+                # Low anthropomorphism: Technical, concise
+                return (f"{context_msg}**Explanation:**\n\n{formatted_explanation}\n\n"
+                       "Options:\n"
+                       "- Ask another question\n"
+                       "- Type 'new' to start a new application")
             
         except Exception as e:
             return ("I'm sorry, I couldn't generate that explanation right now. "

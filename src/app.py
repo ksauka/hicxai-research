@@ -24,7 +24,7 @@ field_options = {
     'marital_status': ['Married-civ-spouse', 'Divorced', 'Never-married', 'Separated', 'Widowed', 'Married-spouse-absent', 'Married-AF-spouse'],
     'occupation': ['Tech-support', 'Craft-repair', 'Other-service', 'Sales', 'Exec-managerial', 'Prof-specialty', 'Handlers-cleaners', 'Machine-op-inspct', 'Adm-clerical', 'Farming-fishing', 'Armed-Forces', 'Priv-house-serv', 'Protective-serv', 'Transport-moving', '?'],
     'sex': ['Male', 'Female'],
-    'race': ['White', 'Asian-Pac-Islander', 'Amer-Indian-Eskimo', 'Other', 'Black'],
+    'race': ['Black', 'Asian-Pac-Islander', 'Amer-Indian-Eskimo', 'White', 'Other'],
     'native_country': ['United-States', 'Cambodia', 'Canada', 'China', 'Columbia', 'Cuba', 'Dominican-Republic', 'Ecuador', 'El-Salvador', 'England', 'France', 'Germany', 'Greece', 'Guatemala', 'Haiti', 'Holand-Netherlands', 'Honduras', 'Hong', 'Hungary', 'India', 'Iran', 'Ireland', 'Italy', 'Jamaica', 'Japan', 'Laos', 'Mexico', 'Nicaragua', 'Outlying-US(Guam-USVI-etc)', 'Peru', 'Philippines', 'Poland', 'Portugal', 'Puerto-Rico', 'Scotland', 'South', 'Taiwan', 'Thailand', 'Trinadad&Tobago', 'Vietnam', 'Yugoslavia', '?'],
     'relationship': ['Wife', 'Own-child', 'Husband', 'Not-in-family', 'Other-relative', 'Unmarried']
 }
@@ -833,8 +833,7 @@ with st.expander("📊 Dataset Information - Adult Census Income Dataset"):
     
     **Model Performance:**
     
-    Our trained RandomForest classifier achieves **85.94% accuracy** on this dataset, making it suitable for 
-    demonstrating explainable AI techniques and understanding feature importance in income prediction.
+    Our trained RandomForest classifier achieves **85.94% accuracy** on this dataset.
     """)
 
 # A/B Testing Debug Info (only for development - hidden from users)
