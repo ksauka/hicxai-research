@@ -531,7 +531,6 @@ class LoanAssistant:
                 
                 # Provide context-specific help on second attempt
                 help_msg = self._get_smart_validation_message(field, user_input, self.field_attempts[field])
-                print(f"🔍 DEBUG: value=None, attempt={self.field_attempts[field]}, msg={help_msg[:80] if help_msg else 'None'}...")
                 return {
                     'success': False,
                     'message': help_msg
@@ -547,8 +546,6 @@ class LoanAssistant:
                     err = f"I'm having trouble understanding your {field.replace('_', ' ')}. Let me provide some specific examples to help:\n\n{self._get_field_help(field)}\n\nOr you can say 'help' for more guidance."
                 else:
                     err = self._get_smart_validation_message(field, user_input, self.field_attempts[field])
-                
-                print(f"🔍 DEBUG: validation failed, attempt={self.field_attempts[field]}, msg={err[:80] if err else 'None'}...")
                 
                 return {
                     'success': False,
@@ -969,8 +966,6 @@ class LoanAssistant:
     def _get_smart_validation_message(self, field: str, user_input: str, attempt: int) -> str:
         """Provide smart, context-aware validation messages"""
         from ab_config import config
-        
-        print(f"🔍 _get_smart_validation_message: field={field}, attempt={attempt}, anthropomorphic={config.show_anthropomorphic}, LLM_available={NATURAL_CONVERSATION_AVAILABLE}")
         
         if config.show_anthropomorphic:
             # Try to get dynamic LLM-generated message first
