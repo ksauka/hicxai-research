@@ -321,10 +321,15 @@ class LoanAssistant:
         elif user_input.lower() in ['new', 'another', 'restart', 'again']:
             return self._restart_application()
         else:
-            return ("Your application has been processed! Here are your options:\n"
-                   "- Say 'explain' to understand how the decision was made\n"
-                   "- Say 'new' to start a new application\n"
-                   "- Ask me any questions about the result")
+            if config.explanation == "none":
+                return ("Your application has been processed! You can:\n"
+                       "- Say 'new' to start a new application\n"
+                       "- For further details, please visit your local branch")
+            else:
+                return ("Your application has been processed! Here are your options:\n"
+                       "- Say 'explain' to understand how the decision was made\n"
+                       "- Say 'new' to start a new application\n"
+                       "- Ask me any questions about the result")
 
     def _handle_complete(self, user_input: str) -> str:
         """Handle interactions when application is complete"""
@@ -343,15 +348,29 @@ class LoanAssistant:
             # Provide helpful guidance
             result = self.application.loan_approved
             status = "approved" if result else "denied"
-            return (f"Your loan application has been {status}! Here's what you can do:\n\n"
-                   "🔍 **Ask for explanations:** 'Why was I approved/denied?' or 'Explain the decision'\n"
-                   "🔧 **What-if analysis:** 'What if my income was higher?' or 'What changes would help?'\n"
-                   "📊 **Feature importance:** 'Which factors were most important?'\n"
-                   "🆕 **New application:** 'Start a new application'\n\n"
-                   "Just ask me anything about your loan decision!")
+            
+            if config.explanation == "none":
+                # Simple message without explanation options
+                return (f"Your loan application has been {status}. "
+                       f"For further details, please visit your local branch. "
+                       f"Would you like to start a new application? Just say 'new' or 'restart'.")
+            else:
+                # Full options when explanations are available
+                return (f"Your loan application has been {status}! Here's what you can do:\n\n"
+                       "🔍 **Ask for explanations:** 'Why was I approved/denied?' or 'Explain the decision'\n"
+                       "🔧 **What-if analysis:** 'What if my income was higher?' or 'What changes would help?'\n"
+                       "📊 **Feature importance:** 'Which factors were most important?'\n"
+                       "🆕 **New application:** 'Start a new application'\n\n"
+                       "Just ask me anything about your loan decision!")
 
     def _handle_explanation(self, user_input: str) -> str:
         """Handle explanation requests using the XAgent-compatible approach"""
+        # If explanations are disabled (none condition), provide generic response
+        if config.explanation == "none":
+            return ("I'm sorry, but detailed explanations are not available at this time. "
+                   "For further information about your loan decision, please visit your local branch. "
+                   "Would you like to start a new application?")
+        
         try:
             # Set up the agent instance properly first
             self._setup_agent_instance()
@@ -868,11 +887,20 @@ class LoanAssistant:
                     result_msg += ("Congratulations! Your loan application has been approved based on your profile. "
                                  "You should hear from our lending team within 2-3 business days.\n\n")
                 else:
-                    result_msg += ("Unfortunately, your loan application was not approved at this time. "
-                                 "This decision is based on various factors in your application.\n\n")
+                    # Simple message for non-explanation conditions
+                    if config.explanation == "none":
+                        result_msg += ("Based on the data you provided, you could not qualify for the loan at this time. "
+                                     "For further details, please visit your local branch.\n\n")
+                    else:
+                        result_msg += ("Unfortunately, your loan application was not approved at this time. "
+                                     "This decision is based on various factors in your application.\n\n")
                 
-                result_msg += ("Would you like me to explain how this decision was made? "
-                             "Just ask me 'why' or 'explain the decision'.")
+                # Only offer explanations if explanation mode is enabled
+                if config.show_any_explanation:
+                    result_msg += ("Would you like me to explain how this decision was made? "
+                                 "Just ask me 'why' or 'explain the decision'.")
+                else:
+                    result_msg += "Would you like to start a new application?"
                 
                 return result_msg
             else:

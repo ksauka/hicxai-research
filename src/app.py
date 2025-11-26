@@ -360,7 +360,7 @@ with st.sidebar:
     # A/B Testing Debug Info (only for development/testing - hidden from users)
     # Uncomment the lines below only when debugging A/B testing locally
     # if config.show_debug_info and os.getenv('HICXAI_DEBUG_MODE', 'false').lower() == 'true':
-    # What‑if Lab (V1 only, shown after user asks what-if)
+    # What‑if Lab (shown after user asks what-if in counterfactual conditions)
     if config.show_counterfactual and getattr(st.session_state.loan_assistant, 'show_what_if_lab', False):
         st.markdown("---")
         st.subheader("🧪 What‑if Lab")
