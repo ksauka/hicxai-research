@@ -694,62 +694,6 @@ if current_state == 'collecting_info' and hasattr(st.session_state.loan_assistan
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown("*💬 Or you can still type your answer in the chat box above*")
 
-# XAI Analysis Options (available once application is complete)
-if current_state == 'complete':
-    # Show explanation options only if any explanations are enabled
-    if config.show_any_explanation:
-        st.markdown("---")
-        st.markdown("### 🔍 AI Explanation Options")
-        st.markdown("Now that your application is complete, you can ask for detailed explanations:")
-        
-        # Dynamically create columns based on enabled explanation types
-        enabled_explanations = []
-        if config.show_shap_visualizations:
-            enabled_explanations.append('shap')
-        if config.show_counterfactual:
-            enabled_explanations.append('dice')
-        # Note: Anchor is always available when any explanation is enabled
-        
-        if enabled_explanations or config.show_any_explanation:
-            num_cols = len(enabled_explanations) if enabled_explanations else 1
-            cols = st.columns(num_cols)
-            col_idx = 0
-            
-            # Show SHAP option only if feature_importance explanation enabled
-            if config.show_shap_visualizations:
-                with cols[col_idx]:
-                    st.markdown("**🎯 Feature Importance (SHAP)**")
-                    st.markdown("• 'Which factors affected my decision?'")
-                    st.markdown("• 'Why was I approved/denied?'")
-                    if st.button("Ask Feature Importance", key="shap_question"):
-                        query = "Which factors most affected my loan decision?"
-                        response = st.session_state.loan_assistant.handle_message(query)
-                        
-                        # Add SHAP visualizations if available
-                        if (config.show_shap_visualizations and 
-                            hasattr(st.session_state.loan_assistant, 'last_shap_result') and 
-                            st.session_state.loan_assistant.last_shap_result):
-                            shap_data = st.session_state.loan_assistant.last_shap_result
-                            # Render visuals in the UI (function returns None), do not append to text
-                            display_shap_explanation(shap_data)
-                            explain_shap_visualizations()
-                        
-                        st.session_state.chat_history.append((query, response))
-                        st_rerun()
-                col_idx += 1
-            
-            # Show counterfactual option only if counterfactual explanation enabled
-            if config.show_counterfactual:
-                with cols[col_idx]:
-                    st.markdown("**🔄 What-If Analysis (DiCE)**")
-                    st.markdown("• 'What if my income was higher?'")
-                    st.markdown("• 'What changes would get me approved?'")
-                    if st.button("Ask What-If", key="dice_question"):
-                        response = st.session_state.loan_assistant.handle_message("What changes would help me get approved?")
-                        st.session_state.chat_history.append(("What changes would help me get approved?", response))
-                        st_rerun()
-                col_idx += 1
-
 # Feedback section (appears after application is complete)
 if current_state == 'complete' and len(st.session_state.chat_history) > 5:
     st.markdown("---")
@@ -844,12 +788,11 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
                 with open(filename, "w") as f:
                     f.write(json.dumps(feedback_data, indent=2))
 
-# Footer with detailed dataset information
+# Footer with dataset information
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: #666; padding: 20px;'>
-    <p>🏦 AI Loan Assistant | Powered by Explainable AI</p>
-    <p><small>Features: Multi-turn conversation • SHAP explanations • DiCE what-if analysis • Anchor rules • Natural language processing</small></p>
+    <p>🏦 AI Loan Assistant</p>
     <p><small>🔬 Algorithm trained on the Adult (Census Income) dataset with 32,561 records from the UCI Machine Learning Repository</small></p>
 </div>
 """, unsafe_allow_html=True)
