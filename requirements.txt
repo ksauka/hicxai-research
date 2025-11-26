@@ -8,4 +8,4 @@ anchor-exp>=0.0.2
 Dice-ML>=0.10.0
 graphviz>=0.20.3
 dtreeviz>=2.2.2
-openai>=1.0.0,<2.0.0
+openai>=1.0.0

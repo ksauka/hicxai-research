@@ -15,12 +15,14 @@ import difflib
 
 # Import natural conversation enhancer
 try:
-    from natural_conversation import enhance_response
+    from natural_conversation import enhance_response, enhance_validation_message
     NATURAL_CONVERSATION_AVAILABLE = True
 except ImportError:
     NATURAL_CONVERSATION_AVAILABLE = False
     def enhance_response(response, context=None, response_type="loan"):
         return response
+    def enhance_validation_message(field, user_input, expected_format, attempt=1):
+        return None  # Fallback returns None to use hardcoded messages
 
 class ConversationState(Enum):
     GREETING = "greeting"
@@ -437,9 +439,6 @@ class LoanAssistant:
                     from xai_methods import route_to_xai_method
                     explanation_result = route_to_xai_method(self.agent, intent_result)
                     
-                    # Debug logging
-                    print(f"🔍 DEBUG: XAI result: {explanation_result}")
-                    
                     explanation = explanation_result.get('explanation', 'Sorry, I could not generate an explanation.')
                     
                     # Store SHAP results for visualization (if available)
@@ -447,24 +446,15 @@ class LoanAssistant:
                         isinstance(explanation_result, dict) and 
                         ('feature_impacts' in explanation_result or 'shap_values' in explanation_result)):
                         self.last_shap_result = explanation_result
-                        print(f"🔍 DEBUG: Stored SHAP result for visualization")
                     else:
                         self.last_shap_result = None
                     
-                    # Debug logging
-                    print(f"🔍 DEBUG: Final explanation: {explanation}")
-                    
-                    context_msg = f"*I understood this as: \"{matched_question}\"*\n\n"
-                    
                 except Exception as e:
                     explanation = f"Sorry, I couldn't generate that explanation right now. Error: {str(e)}"
-                    context_msg = ""
                 
             else:
                 # No good match found - fallback to general agent
-                print(f"🔍 DEBUG: No good match found, falling back to general agent")
                 explanation = self.agent.handle_user_input(user_input)
-                context_msg = ""
             
             # Format the explanation nicely
             if isinstance(explanation, dict) and 'explanation' in explanation:
@@ -482,36 +472,30 @@ class LoanAssistant:
                         'matched_question': locals().get('matched_question'),
                         'prediction': self.agent.predicted_class
                     }
-                    formatted_explanation = enhance_response(formatted_explanation, context_info, response_type="explanation")
-            except Exception:
+                    enhanced = enhance_response(formatted_explanation, context_info, response_type="explanation")
+                    if enhanced and enhanced != formatted_explanation:
+                        formatted_explanation = enhanced
+            except Exception as e:
                 pass
             
             # Humanize explanation for high anthropomorphism if not already done by LLM
             if config.show_anthropomorphic:
-                # Make technical explanations more conversational
-                formatted_explanation = formatted_explanation.replace('SHAP Analysis:', 'Looking at your application,')
-                formatted_explanation = formatted_explanation.replace('the model predicted', 'I see that your income level is likely to be')
-                formatted_explanation = formatted_explanation.replace('increases the prediction probability', 'works in your favor')
-                formatted_explanation = formatted_explanation.replace('decreases the prediction probability', 'works against you')
-                formatted_explanation = formatted_explanation.replace('The most important factors are:', 'here are the key factors I considered:')
-                formatted_explanation = formatted_explanation.replace('For the current instance,', 'Based on what you\'ve told me,')
+                # Make technical explanations more conversational and warm
+                formatted_explanation = formatted_explanation.replace('SHAP Analysis:', 'Let me walk you through what I found in your application,')
+                formatted_explanation = formatted_explanation.replace('the model predicted', 'I can see that your income level is likely to be')
+                formatted_explanation = formatted_explanation.replace('increases the prediction probability', 'really helps your case')
+                formatted_explanation = formatted_explanation.replace('decreases the prediction probability', 'makes things a bit more challenging')
+                formatted_explanation = formatted_explanation.replace('The most important factors are:', 'the key things I looked at in your situation are:')
+                formatted_explanation = formatted_explanation.replace('For the current instance,', 'Looking at your specific situation,')
+                formatted_explanation = formatted_explanation.replace('Based on what you\'ve told me,', 'Thank you for sharing that information with me!')
             
             # Format response based on anthropomorphism level
             if config.show_anthropomorphic:
-                # High anthropomorphism: Warm, conversational
-                return (f"{context_msg}💡 **Here's what I found:**\n\n{formatted_explanation}\n\n"
-                       "Would you like me to explain anything else, or shall we start a fresh application? 😊\n\n"
-                       "Feel free to ask:\n"
-                       "• 'What if I changed my situation?' 🔄\n"
-                       "• 'Why did I get this result?' 🎯\n" 
-                       "• 'What are the key requirements?' 📋\n"
-                       "• 'Start fresh' to begin a new application")
+                # High anthropomorphism: Warm, friendly, human-like
+                return f"💡 **I'm happy to help explain this to you!**\n\n{formatted_explanation}\n\n😊"
             else:
                 # Low anthropomorphism: Technical, concise
-                return (f"{context_msg}**Explanation:**\n\n{formatted_explanation}\n\n"
-                       "Options:\n"
-                       "- Ask another question\n"
-                       "- Type 'new' to start a new application")
+                return f"**Explanation:**\n\n{formatted_explanation}"
             
         except Exception as e:
             return ("I'm sorry, I couldn't generate that explanation right now. "
@@ -547,6 +531,7 @@ class LoanAssistant:
                 
                 # Provide context-specific help on second attempt
                 help_msg = self._get_smart_validation_message(field, user_input, self.field_attempts[field])
+                print(f"🔍 DEBUG: value=None, attempt={self.field_attempts[field]}, msg={help_msg[:80] if help_msg else 'None'}...")
                 return {
                     'success': False,
                     'message': help_msg
@@ -555,12 +540,16 @@ class LoanAssistant:
             # Validate the value
             validation_result = self._validate_field_value(field, value)
             if not validation_result['valid']:
-                # v1 anthropomorphic error formatting where applicable
-                err = validation_result.get('message', 'Invalid value')
-                if 'allowed' in validation_result:
-                    err = self._format_error(field, err, validation_result['allowed'])
+                self.field_attempts[field] = self.field_attempts.get(field, 0) + 1
+                
+                # Use smart validation message instead of generic one
+                if self.field_attempts[field] >= 3:
+                    err = f"I'm having trouble understanding your {field.replace('_', ' ')}. Let me provide some specific examples to help:\n\n{self._get_field_help(field)}\n\nOr you can say 'help' for more guidance."
                 else:
-                    err = self._format_error(field, err)
+                    err = self._get_smart_validation_message(field, user_input, self.field_attempts[field])
+                
+                print(f"🔍 DEBUG: validation failed, attempt={self.field_attempts[field]}, msg={err[:80] if err else 'None'}...")
+                
                 return {
                     'success': False,
                     'message': err
@@ -979,28 +968,114 @@ class LoanAssistant:
     
     def _get_smart_validation_message(self, field: str, user_input: str, attempt: int) -> str:
         """Provide smart, context-aware validation messages"""
-        field_examples = {
-            'age': "I need a number for your age. For example: '25', '30', or '45'",
-            'workclass': "Please choose from: Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked, or '?' if unknown",
-            'education': "Please specify your education level like: 'HS-grad', 'Bachelors', 'Masters', 'Some-college', etc. Click the buttons below for all options!",
-            'sex': "Please specify 'Male' or 'Female' - these are the only categories in the dataset I was trained on",
-            'marital_status': "Please choose: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', or 'Married-AF-spouse'",
-            'occupation': "Please describe your job from the available categories, or '?' if uncertain. Click the buttons below for all options!",
-            'hours_per_week': "I need the number of hours you work per week. For example: '40', '35', or '50'",
-            'capital_gain': "Enter the amount of capital gains, or '0' if none. For example: '5000' or '0'",
-            'capital_loss': "Enter the amount of capital losses, or '0' if none. For example: '2000' or '0'",
-            'race': "Please choose from: White, Black, Asian-Pac-Islander, Amer-Indian-Eskimo, or Other",
-            'native_country': "Please specify your country - I support all 42 countries in my training data! Click the buttons below or type the country name.",
-            'relationship': "Please choose from: Husband, Wife, Own-child, Not-in-family, Other-relative, or Unmarried"
-        }
+        from ab_config import config
         
-        base_msg = f"I didn't quite understand '{user_input}' for {field.replace('_', ' ')}."
-        help_msg = field_examples.get(field, f"Please provide your {field.replace('_', ' ')}.")
+        print(f"🔍 _get_smart_validation_message: field={field}, attempt={attempt}, anthropomorphic={config.show_anthropomorphic}, LLM_available={NATURAL_CONVERSATION_AVAILABLE}")
         
-        if attempt == 2:
-            return f"{base_msg}\n\n💡 **Tip:** {help_msg}\n\nTry again, or say 'help' for more options."
+        if config.show_anthropomorphic:
+            # Try to get dynamic LLM-generated message first
+            if NATURAL_CONVERSATION_AVAILABLE:
+                try:
+                    # Define expected format for each field
+                    expected_formats = {
+                        'age': "a number between 17-90, e.g., '25', '30', or '45'",
+                        'workclass': "one of: Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked, or '?'",
+                        'education': "education level like 'HS-grad', 'Bachelors', 'Masters', 'Some-college', etc.",
+                        'sex': "'Male' or 'Female'",
+                        'marital_status': "one of: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', 'Married-AF-spouse'",
+                        'occupation': "a job category or '?' if uncertain",
+                        'hours_per_week': "number of hours like '40', '35', or '50'",
+                        'capital_gain': "amount like '5000' or '0' if none",
+                        'capital_loss': "amount like '2000' or '0' if none",
+                        'race': "one of: Black, Asian-Pac-Islander, Amer-Indian-Eskimo, White, or Other",
+                        'native_country': "a country name from the 42 supported countries",
+                        'relationship': "one of: Husband, Wife, Own-child, Not-in-family, Other-relative, Unmarried"
+                    }
+                    
+                    expected_format = expected_formats.get(field, f"valid {field.replace('_', ' ')}")
+                    llm_message = enhance_validation_message(field, user_input, expected_format, attempt, high_anthropomorphism=True)
+                    
+                    if llm_message:
+                        return llm_message
+                except Exception:
+                    pass  # Fall back to hardcoded messages
+            
+            # Fallback: Hardcoded warm messages if LLM not available
+            # High anthropomorphism: Warm, friendly, understanding
+            field_examples = {
+                'age': "I need a number for your age, please! 😊 For example: '25', '30', or '45'",
+                'workclass': "No worries! Please choose from: Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked, or '?' if you're not sure",
+                'education': "I'd love to know your education level! Try: 'HS-grad', 'Bachelors', 'Masters', 'Some-college', etc. Feel free to click the buttons below for all options! 📚",
+                'sex': "Please let me know: 'Male' or 'Female' - these are the only categories in my dataset, I apologize for the limitation",
+                'marital_status': "I need your marital status! Please choose: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', or 'Married-AF-spouse'",
+                'occupation': "Tell me about your job! Please pick from the available categories, or '?' if you're not sure. Click the buttons below for all options! 💼",
+                'hours_per_week': "How many hours do you work per week? Just give me a number like: '40', '35', or '50' ⏰",
+                'capital_gain': "I need the amount of capital gains, or just '0' if you don't have any. For example: '5000' or '0'",
+                'capital_loss': "Please tell me your capital losses, or '0' if none. For example: '2000' or '0'",
+                'race': "Please help me understand your race/ethnicity. Choose from: Black, Asian-Pac-Islander, Amer-Indian-Eskimo, White, or Other",
+                'native_country': "Which country are you from? I support all 42 countries in my training data! 🌍 Click the buttons below or just type the country name.",
+                'relationship': "What's your household relationship? Please choose from: Husband, Wife, Own-child, Not-in-family, Other-relative, or Unmarried"
+            }
+            
+            base_msg = f"Oops! I didn't quite catch that - '{user_input}' doesn't seem right for {field.replace('_', ' ')}. 🤔"
+            help_msg = field_examples.get(field, f"Please share your {field.replace('_', ' ')} with me!")
+            
+            if attempt == 2:
+                return f"{base_msg}\n\n💡 **Here's a tip:** {help_msg}\n\nLet's try again, or say 'help' if you need more options! 😊"
+            else:
+                return f"{base_msg}\n\n{help_msg}"
         else:
-            return f"{base_msg} {help_msg}"
+            # Low anthropomorphism: Technical, concise
+            # Try to get dynamic LLM-generated message first
+            if NATURAL_CONVERSATION_AVAILABLE:
+                try:
+                    # Define expected format for each field
+                    expected_formats = {
+                        'age': "a number between 17-90, e.g., '25', '30', or '45'",
+                        'workclass': "one of: Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked, or '?'",
+                        'education': "education level like 'HS-grad', 'Bachelors', 'Masters', 'Some-college', etc.",
+                        'sex': "'Male' or 'Female'",
+                        'marital_status': "one of: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', 'Married-AF-spouse'",
+                        'occupation': "a job category or '?' if uncertain",
+                        'hours_per_week': "number of hours like '40', '35', or '50'",
+                        'capital_gain': "amount like '5000' or '0' if none",
+                        'capital_loss': "amount like '2000' or '0' if none",
+                        'race': "one of: Black, Asian-Pac-Islander, Amer-Indian-Eskimo, White, or Other",
+                        'native_country': "a country name from the 42 supported countries",
+                        'relationship': "one of: Husband, Wife, Own-child, Not-in-family, Other-relative, Unmarried"
+                    }
+                    
+                    expected_format = expected_formats.get(field, f"valid {field.replace('_', ' ')}")
+                    llm_message = enhance_validation_message(field, user_input, expected_format, attempt, high_anthropomorphism=False)
+                    
+                    if llm_message:
+                        return llm_message
+                except Exception:
+                    pass  # Fall back to hardcoded messages
+            
+            # Fallback: Hardcoded technical messages if LLM not available
+            field_examples = {
+                'age': "I need a number for your age. For example: '25', '30', or '45'",
+                'workclass': "Please choose from: Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked, or '?' if unknown",
+                'education': "Please specify your education level like: 'HS-grad', 'Bachelors', 'Masters', 'Some-college', etc. Click the buttons below for all options!",
+                'sex': "Please specify 'Male' or 'Female' - these are the only categories in the dataset I was trained on",
+                'marital_status': "Please choose: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', or 'Married-AF-spouse'",
+                'occupation': "Please describe your job from the available categories, or '?' if uncertain. Click the buttons below for all options!",
+                'hours_per_week': "I need the number of hours you work per week. For example: '40', '35', or '50'",
+                'capital_gain': "Enter the amount of capital gains, or '0' if none. For example: '5000' or '0'",
+                'capital_loss': "Enter the amount of capital losses, or '0' if none. For example: '2000' or '0'",
+                'race': "Please choose from: Black, Asian-Pac-Islander, Amer-Indian-Eskimo, White, or Other",
+                'native_country': "Please specify your country - I support all 42 countries in my training data! Click the buttons below or type the country name.",
+                'relationship': "Please choose from: Husband, Wife, Own-child, Not-in-family, Other-relative, or Unmarried"
+            }
+            
+            base_msg = f"I didn't quite understand '{user_input}' for {field.replace('_', ' ')}."
+            help_msg = field_examples.get(field, f"Please provide your {field.replace('_', ' ')}.")
+            
+            if attempt == 2:
+                return f"{base_msg}\n\n💡 **Tip:** {help_msg}\n\nTry again, or say 'help' for more options."
+            else:
+                return f"{base_msg} {help_msg}"
     
     def _get_field_help(self, field: str) -> str:
         """Provide detailed help for specific fields"""

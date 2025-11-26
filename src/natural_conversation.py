@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 from typing import Any, Dict, Optional
+from pathlib import Path
 
 # Try to import streamlit to fetch secrets when running on Streamlit Cloud
 try:
@@ -21,19 +22,54 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     st = None  # type: ignore
 
+# Ensure .env file is loaded (in case env_loader hasn't run yet)
+def _ensure_env_loaded():
+    """Load .env file if not already loaded"""
+    # Try to load .env files (prefer .env.local over .env, like env_loader.py)
+    try:
+        root = Path(__file__).parent.parent
+        env_files = [root / '.env.local', root / '.env']  # Check .env.local first
+        
+        for env_file in env_files:
+            if env_file.exists():
+                with open(env_file, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith('#') or '=' not in line:
+                            continue
+                        
+                        key, value = line.split('=', 1)
+                        k = key.strip()
+                        v = value.strip()
+                        
+                        # ALWAYS override OPENAI_API_KEY to ensure we have the latest from .env files
+                        if k == "OPENAI_API_KEY" and v:
+                            os.environ[k] = v
+                        elif k not in os.environ:
+                            os.environ[k] = v
+    except Exception:
+        pass
+
 
 def _should_use_genai() -> bool:
+    _ensure_env_loaded()
+    
     if os.getenv("HICXAI_GENAI", "on").lower() in {"0", "false", "off"}:
         return False
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    
     # Allow pulling key from Streamlit Secrets when not present in env
-    if not os.getenv("OPENAI_API_KEY") and st is not None:
+    if not api_key and st is not None:
         try:
             key = st.secrets.get("OPENAI_API_KEY", None)  # type: ignore[attr-defined]
             if key:
                 os.environ["OPENAI_API_KEY"] = str(key)
+                api_key = str(key)
         except Exception:
             pass
-    return bool(os.getenv("OPENAI_API_KEY"))
+    
+    return bool(api_key)
 
 
 def _get_openai_client():
@@ -41,24 +77,24 @@ def _get_openai_client():
 
     Honors optional base URL (HICXAI_OPENAI_BASE_URL or OPENAI_BASE_URL) for proxies.
     """
-    # Ensure key loaded from st.secrets if available
     _ = _should_use_genai()
     api_key = os.environ.get("OPENAI_API_KEY")
+    
     if not api_key:
         return None
+    
     base_url = (
         os.environ.get("HICXAI_OPENAI_BASE_URL")
         or os.environ.get("OPENAI_BASE_URL")
         or None
     )
-    # Prefer OpenAI SDK v1.x
+    
     try:
         from openai import OpenAI  # type: ignore
         if base_url:
             return OpenAI(api_key=api_key, base_url=base_url)
         return OpenAI(api_key=api_key)
     except Exception:
-        # Legacy SDK fallback will be handled in enhance_response
         return None
 
 
@@ -97,6 +133,65 @@ def _compose_messages(response: str, context: Optional[Dict[str, Any]], style: s
         {"role": "system", "content": sys_prompt},
         {"role": "user", "content": user_prompt},
     ]
+
+
+def enhance_validation_message(field: str, user_input: str, expected_format: str, attempt: int = 1, high_anthropomorphism: bool = True) -> Optional[str]:
+    """Generate a validation message using LLM.
+    
+    Args:
+        field: The field name being validated
+        user_input: The invalid input provided by user
+        expected_format: Description of the expected format
+        attempt: Which attempt this is (1, 2, 3+)
+        high_anthropomorphism: If True, use warm/friendly tone. If False, use technical/concise tone.
+    
+    Returns None if LLM is not available (fallback to hardcoded messages).
+    """
+    if not _should_use_genai():
+        return None
+    
+    try:
+        client = _get_openai_client()
+        if client is None:
+            return None
+        
+        if high_anthropomorphism:
+            system_prompt = (
+                "You are Luna, a friendly and warm AI loan assistant. Generate a brief, empathetic validation message "
+                "when a user enters invalid input. Be encouraging, use appropriate emojis (1-2), and guide them gently. "
+                "Keep it to 1-2 sentences. Show understanding and warmth."
+            )
+        else:
+            system_prompt = (
+                "You are Luna, a professional AI loan assistant. Generate a clear, concise validation message "
+                "when a user enters invalid input. Be direct and helpful. No emojis. "
+                "Keep it to 1-2 sentences. Focus on what the user needs to provide."
+            )
+        
+        user_prompt = (
+            f"The user entered '{user_input}' for the field '{field.replace('_', ' ')}', but this is invalid. "
+            f"Expected format: {expected_format}. "
+            f"This is attempt #{attempt}. "
+            f"Generate a friendly validation message that helps them correct their input."
+        )
+        
+        model_name = os.getenv("HICXAI_OPENAI_MODEL", "gpt-4o-mini")
+        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.7"))  # Higher for more variety
+        
+        completion = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=temperature,
+            max_tokens=100,
+        )
+        
+        result = completion.choices[0].message.content if completion and completion.choices else None
+        return result
+    except Exception:
+        return None
 
 
 def enhance_response(response: str, context: Optional[Dict[str, Any]] = None, response_type: str = "explanation") -> str:

@@ -295,67 +295,16 @@ else:
 # Single conversational interface
 st.markdown("---")
 
-# Sidebar for application status
+# Sidebar - keep minimal to avoid distracting from experimental task
 with st.sidebar:
-    st.header("Luna's Progress Tracker")
+    # Only show restart option - remove progress tracker to reduce confusion
+    st.markdown("**Actions**")
+    if st.button("🔄 Start New Application", key="sidebar_restart", use_container_width=True):
+        st.session_state.loan_assistant = LoanAssistant(agent)
+        st.session_state.chat_history = []
+        st_rerun()
     
-    # Get current state info
-    state_info = st.session_state.loan_assistant.get_conversation_state()
-    completion = st.session_state.loan_assistant.application.calculate_completion()
-    
-    # Progress bar
-    st.markdown("### Progress")
-    progress_html = f"""
-    <div class="progress-bar">
-        <div class="progress-fill" style="width: {completion:.2f}%">{completion:.2f}%</div>
-    </div>
-    """
-    st.markdown(progress_html, unsafe_allow_html=True)
-    
-    # Current status
-    st.markdown("### Current Status")
-    current_state = state_info['state']  # Keep original state value for logic
-    current_state_display = current_state.replace('_', ' ').title()
-    st.markdown(f"**State:** {current_state_display}")
-    
-    if state_info.get('current_step'):
-        current_step = state_info['current_step']
-        step_desc = state_info.get('step_description', '')
-        st.markdown(f"**Current Step:** {current_step}/10")
-        if step_desc:
-            st.markdown(f"**Collecting:** {step_desc}")
-    elif state_info['current_field']:
-        st.markdown(f"**Collecting:** {state_info['current_field'].replace('_', ' ').title()}")
-    
-    # Quick actions
-    st.markdown("---")
-    st.markdown("**Quick Actions**")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Show Progress", key="sidebar_progress"):
-            response = st.session_state.loan_assistant._show_progress()
-            st.session_state.chat_history.append(("show progress", response))
-            st_rerun()
-    
-    with col2:
-        if st.button("Restart", key="sidebar_restart"):
-            st.session_state.loan_assistant = LoanAssistant(agent)
-            st.session_state.chat_history = []
-            st_rerun()
-
-    # High anthropomorphism: Explanation style selector (applies to generative rewriter where available)
-    if config.show_anthropomorphic:
-        st.markdown("---")
-        st.markdown("**Explanation Style**")
-        style = st.selectbox(
-            "Tone and detail",
-            options=["detailed", "short", "actionable"],
-            index=0,
-            help=f"Choose how {config.assistant_name} summarizes explanations."
-        )
-        # Make available to the backend via env var
-        os.environ["HICXAI_STYLE"] = style
+    # Explanation style is controlled by the experimental condition, not user choice
     
     # A/B Testing Debug Info (only for development/testing - hidden from users)
     # Uncomment the lines below only when debugging A/B testing locally
@@ -735,6 +684,9 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
         submitted = st.form_submit_button("Submit Feedback 🚀")
         
         if submitted:
+            # Calculate completion percentage
+            completion = st.session_state.loan_assistant.application.calculate_completion()
+            
             feedback_data = {
                 "rating": rating,
                 "ease_of_use": ease_of_use,
