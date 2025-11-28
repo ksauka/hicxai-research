@@ -76,7 +76,22 @@ def back_to_survey(done_flag=True):
         st.warning("Return link missing or invalid. Please use your browser Back button.")
         return
     st.session_state._returned = True
-    # The redirect will be handled on next rerun by the catch block at top
+    # Execute redirect immediately
+    st.markdown(f'<meta http-equiv="refresh" content="0;url={final}">', unsafe_allow_html=True)
+    st.components.v1.html(
+        f'''
+        <script>
+          if (window.top !== window.self) {{
+            window.top.location.href = "{final}";
+          }} else {{
+            window.location.replace("{final}");
+          }}
+        </script>
+        ''',
+        height=0
+    )
+    st.markdown(f"### 🔄 Redirecting...\n\nIf not redirected, [click here]({final}).")
+    st.stop()
 
 # Make available to rest of app
 st.session_state.back_to_survey = back_to_survey
