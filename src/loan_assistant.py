@@ -424,6 +424,21 @@ class LoanAssistant:
                             inferred_method = 'dice'
                         else:
                             inferred_method = 'shap'
+                    
+                    # CRITICAL: Remap to available explanation method for this experimental condition
+                    # The classifier may classify user intent as SHAP or DiCE based on their question,
+                    # but we must only provide the explanation type enabled in their condition
+                    if config.explanation == 'counterfactual':
+                        # Conditions 3-4: Only counterfactual (DiCE) explanations available
+                        # Map any explanation request (shap, general) to DiCE
+                        if inferred_method in ['shap', 'general']:
+                            inferred_method = 'dice'
+                    elif config.explanation == 'feature_importance':
+                        # Conditions 5-6: Only feature importance (SHAP) explanations available
+                        # Map any explanation request (dice, general) to SHAP
+                        if inferred_method in ['dice', 'general']:
+                            inferred_method = 'shap'
+                    # Note: 'anchor' is always available as a baseline in all conditions
 
                     # If user is asking what-if (counterfactual), enable What‑if Lab in UI
                     if inferred_method == 'dice':
