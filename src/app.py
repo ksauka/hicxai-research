@@ -6,93 +6,6 @@ import env_loader
 # Configure page FIRST - before any other Streamlit commands
 st.set_page_config(page_title="AI Loan Assistant - Complete Solution", layout="wide")
 
-# ===== Qualtrics/Prolific return integration (self-contained) =====
-from urllib.parse import unquote, urlparse, parse_qsl, urlencode, urlunparse
-import time
-
-def _get_query_params():
-    """Streamlit-compatible query param reader across versions."""
-    try:
-        return dict(st.query_params)  # Streamlit >=1.30
-    except Exception:
-        try:
-            return st.experimental_get_query_params()  # older versions
-        except Exception:
-            return {}
-
-def _as_str(v):
-    return v[0] if isinstance(v, list) and v else (v if isinstance(v, str) else "")
-
-# Read once
-_qs = _get_query_params()
-_pid_in   = _as_str(_qs.get("pid", ""))
-_cond_in  = _as_str(_qs.get("cond", ""))
-_ret_raw  = _as_str(_qs.get("return", ""))  # URL-encoded Qualtrics link with ?stage=post
-
-# Persist into session (idempotent)
-if "pid" not in st.session_state and _pid_in:
-    st.session_state.pid = _pid_in
-if "cond" not in st.session_state and _cond_in:
-    st.session_state.cond = _cond_in
-if "return_raw" not in st.session_state and _ret_raw:
-    st.session_state.return_raw = _ret_raw
-if "has_return_url" not in st.session_state:
-    st.session_state.has_return_url = bool(st.session_state.get("return_raw"))
-
-if "_returned" not in st.session_state:
-    st.session_state._returned = False
-
-def _build_return_url(done=True):
-    """Decode Qualtrics URL, append pid/cond/done safely, rebuild."""
-    rr = st.session_state.get("return_raw")
-    if not rr:
-        return None
-    decoded = unquote(rr)  # e.g., https%3A%2F%2F... -> https://...
-    p = urlparse(decoded)
-    q = dict(parse_qsl(p.query))
-    q.update({
-        "pid":  st.session_state.get("pid", ""),
-        "cond": st.session_state.get("cond", ""),
-        "done": "1" if done else "0",
-    })
-    return urlunparse(p._replace(query=urlencode(q)))
-
-def back_to_survey(done=True):
-    """Single exit path. DO NOT call automatically on load."""
-    if st.session_state._returned:
-        return
-    final = _build_return_url(done)
-    if not final:
-        st.warning("Return link missing. Please use your browser Back button to return to the survey.")
-        return
-    st.session_state._returned = True
-    st.components.v1.html(f'<script>window.location.replace("{final}");</script>', height=30)
-
-# Make available to the rest of the app
-st.session_state.back_to_survey = back_to_survey
-
-# Optional 3-minute cap (no auto redirect here – safer; call when you want)
-if "deadline_ts" not in st.session_state:
-    st.session_state.deadline_ts = time.time() + 180  # 180s
-
-# Small footer helper: always give a manual "continue" option if we have return URL
-def _render_return_footer():
-    if not st.session_state.get("has_return_url", False):
-        return
-    # Show a thin debug line in dev
-    with st.container():
-        st.markdown("---")
-        col_a, col_b = st.columns([3, 1])
-        with col_a:
-            remaining = max(0, int(st.session_state.deadline_ts - time.time()))
-            m, s = divmod(remaining, 60)
-            st.caption(f"⏱️ You can return to the survey at any time. Time left: {m}:{s:02d}")
-        with col_b:
-            if st.button("✅ Continue to the survey", type="primary", use_container_width=True, key="footer_return"):
-                st.session_state.back_to_survey(done=True)
-
-# ===== End Qualtrics return integration =====
-
 # Now import everything else
 from agent import Agent
 from nlu import NLU
@@ -900,5 +813,16 @@ if os.getenv('HICXAI_DEBUG_MODE', 'false').lower() == 'true':
         st.markdown(f"**Concurrent Testing:** ✅ Enabled")
         st.markdown(f"**User Isolation:** ✅ Session-based")
 
-# Render the sticky return footer (always available if return URL present)
-_render_return_footer()
+# Render the sticky return footer (if integration was set up by wrapper)
+if st.session_state.get("has_return_url", False):
+    import time
+    st.markdown("---")
+    col_a, col_b = st.columns([3, 1])
+    with col_a:
+        remaining = max(0, int(st.session_state.get("deadline_ts", time.time()) - time.time()))
+        m, s = divmod(remaining, 60)
+        st.caption(f"⏱️ You can return to the survey at any time. Time left: {m}:{s:02d}")
+    with col_b:
+        if st.button("✅ Continue to the survey", type="primary", use_container_width=True, key="footer_return"):
+            if hasattr(st.session_state, 'back_to_survey'):
+                st.session_state.back_to_survey(done=True)
