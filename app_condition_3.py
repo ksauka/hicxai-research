@@ -12,70 +12,73 @@ import streamlit as st
 os.environ['HICXAI_EXPLANATION'] = 'counterfactual'
 os.environ['HICXAI_ANTHRO'] = 'low'
 
-# ===== QUALTRICS/PROLIFIC INTEGRATION =====
-import urllib.parse
+# ===== QUALTRICS/PROLIFIC INTEGRATION (safe redirect) =====
+from urllib.parse import unquote, urlparse, parse_qsl, urlencode, urlunparse
 
-def _get_query_params():
+# Get query params
+try:
+    qs = dict(st.query_params)
+except Exception:
     try:
-        return dict(st.query_params)
+        qs = st.experimental_get_query_params()
+        # Convert lists to strings
+        qs = {k: v[0] if isinstance(v, list) and v else v for k, v in qs.items()}
     except Exception:
-        try:
-            return st.experimental_get_query_params()
-        except Exception:
-            return {}
+        qs = {}
 
-def _as_str(v):
-    return v[0] if isinstance(v, list) and v else (v if isinstance(v, str) else "")
+pid = qs.get("pid", "")
+cond = qs.get("cond", "")
+return_raw = qs.get("return", "")  # ENCODED Qualtrics URL
 
-_qs = _get_query_params()
-pid = _as_str(_qs.get("pid", ""))
-cond = _as_str(_qs.get("cond", ""))
-return_url = _as_str(_qs.get("return", ""))
+def back_to_survey():
+    """Safely decode and append params to Qualtrics URL to prevent loops."""
+    if not return_raw:
+        st.warning("Return link missing. Please use your browser Back to return to the survey.")
+        return
+    
+    # 1) Decode the encoded Qualtrics URL
+    decoded = unquote(return_raw)
+    
+    # 2) Parse and append pid, cond, done=1 safely (no double-encoding)
+    p = urlparse(decoded)
+    q = dict(parse_qsl(p.query))
+    q.update({"pid": pid, "cond": cond, "done": "1"})
+    final = urlunparse(p._replace(query=urlencode(q)))
+    
+    # 3) Redirect exactly once
+    st.components.v1.html(
+        f'<script>window.location.replace("{final}");</script>',
+        height=0
+    )
 
+# Store in session state for use elsewhere
 if "has_return_url" not in st.session_state:
-    st.session_state.has_return_url = bool(return_url)
-if "pid" not in st.session_state and pid:
+    st.session_state.has_return_url = bool(return_raw)
+if "pid" not in st.session_state:
     st.session_state.pid = pid
-if "cond" not in st.session_state and cond:
+if "cond" not in st.session_state:
     st.session_state.cond = cond
-if "return_url" not in st.session_state and return_url:
-    st.session_state.return_url = return_url
-if "_returned" not in st.session_state:
-    st.session_state._returned = False
-
-def back_to_survey(done_flag=True):
-    if st.session_state._returned:
-        return
-    ru = st.session_state.get("return_url") or return_url
-    if not ru:
-        st.warning("Return link missing. Please use your browser Back button to return to the survey.")
-        return
-    d = "1" if done_flag else "0"
-    _pid = st.session_state.get("pid", pid)
-    _cond = st.session_state.get("cond", cond)
-    final = f"{ru}&pid={urllib.parse.quote_plus(_pid or '')}&cond={urllib.parse.quote_plus(_cond or '')}&done={d}"
-    st.session_state._returned = True
-    st.components.v1.html(f'<script>window.location.replace("{final}");</script>', height=0)
-
 st.session_state.back_to_survey = back_to_survey
 
-if "deadline_ts" not in st.session_state:
-    st.session_state.deadline_ts = time.time() + 180
-
-remaining = int(max(0, st.session_state.deadline_ts - time.time()))
-if st.session_state.has_return_url and remaining > 0:
-    mins, secs = divmod(remaining, 60)
-    st.caption(f"⏱️ You will be returned to the survey in ~{mins}:{secs:02d} unless you continue manually.")
-    # Auto-rerun every second to update countdown and check expiration
-    time.sleep(1)
-    st.rerun()
-
-if time.time() >= st.session_state.deadline_ts and st.session_state.has_return_url:
-    st.info("⏰ Time limit reached. Returning you to the survey…")
-    back_to_survey(done_flag=True)
-    st.stop()
+# 3-minute timer: set once
+if "deadline" not in st.session_state:
+    st.session_state.deadline = time.time() + 180
 # ===== END QUALTRICS INTEGRATION =====
 
 # Add src to path and run main app
 sys.path.append('src')
 exec(open('src/app.py').read())
+
+# Timer check and countdown AFTER app loads
+if st.session_state.get("has_return_url", False):
+    if time.time() >= st.session_state.deadline:
+        st.info("⏰ Time limit reached. Returning to the survey…")
+        back_to_survey()
+        st.stop()
+    else:
+        # Show countdown and auto-rerun every 5 seconds
+        remaining = int(max(0, st.session_state.deadline - time.time()))
+        mins, secs = divmod(remaining, 60)
+        st.sidebar.caption(f"⏱️ Auto-return in ~{mins}:{secs:02d}")
+        time.sleep(5)
+        st.rerun()
