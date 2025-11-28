@@ -32,10 +32,14 @@ if "deadline_ts" not in st.session_state:
     st.session_state.deadline_ts = time.time() + 180
 
 def back_to_survey():
-    # Save data before redirecting
-    if logger:
-        try:
-            # Capture application data
+    final = st.session_state.get("return_raw") or ""
+    if not final:
+        st.warning("Return link missing or invalid. Please use your browser Back button.")
+        return
+    
+    # Save data in background (don't block redirect)
+    try:
+        if logger and hasattr(st.session_state, 'loan_assistant'):
             app = st.session_state.loan_assistant.application
             for field in ['age', 'workclass', 'education', 'marital_status', 'occupation', 
                          'relationship', 'race', 'sex', 'native_country', 'hours_per_week',
@@ -43,20 +47,13 @@ def back_to_survey():
                 value = getattr(app, field, None)
                 if value is not None:
                     logger.update_application_data(field, value)
-            
-            # Save prediction if available
             if hasattr(app, 'prediction'):
                 logger.set_prediction(app.prediction, getattr(app, 'prediction_probability', 0.0))
-            
-            # Save data to GitHub
             logger.save_to_github()
-        except Exception as e:
-            print(f"Data logging failed: {e}")
+    except:
+        pass
     
-    final = st.session_state.get("return_raw") or ""
-    if not final:
-        st.warning("Return link missing or invalid. Please use your browser Back button.")
-        return
+    # Execute redirect
     st.components.v1.html(
         f'''
         <meta http-equiv="refresh" content="0; url={final}">
