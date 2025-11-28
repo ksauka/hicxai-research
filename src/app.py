@@ -113,21 +113,6 @@ if st.session_state.get("_returned"):
 if "deadline_ts" not in st.session_state:
     st.session_state.deadline_ts = time.time() + 180
 
-# Optional debug panel (comment out after testing)
-def _debug_panel():
-    st.markdown("### 🔧 Return Debug")
-    st.write({
-        "pid": st.session_state.get("pid", ""),
-        "cond": st.session_state.get("cond", ""),
-        "return_raw": st.session_state.get("return_raw", ""),
-        "decoded": unquote(st.session_state.get("return_raw", "")) if st.session_state.get("return_raw") else "",
-        "final_url": _build_return_url(done=True),
-        "_returned": st.session_state.get("_returned", False)
-    })
-    if st.button("🔁 Test Return"):
-        back_to_survey(done_flag=True)
-_debug_panel()
-
 # ===== END QUALTRICS INTEGRATION =====
 
 # Now import everything else
