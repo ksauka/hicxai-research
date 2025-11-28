@@ -60,9 +60,11 @@ def _build_final_return(done=True):
     # only add if not already present
     pid_ss  = st.session_state.get("pid", "")
     cond_ss = st.session_state.get("cond", "")
+    prolific_pid_ss = st.session_state.get("prolific_pid", "")
 
     if "pid"  not in q and pid_ss:  q["pid"]  = pid_ss
     if "cond" not in q and cond_ss: q["cond"] = cond_ss
+    if "PROLIFIC_PID" not in q and prolific_pid_ss: q["PROLIFIC_PID"] = prolific_pid_ss
     if "done" not in q:             q["done"] = "1" if done else "0"
 
     return urlunparse(p._replace(query=urlencode(q, doseq=True)))
@@ -72,6 +74,8 @@ _qs      = _get_query_params()
 _pid_in  = _as_str(_qs.get("pid", ""))
 _cond_in = _as_str(_qs.get("cond", ""))
 _ret_in  = _as_str(_qs.get("return", ""))
+# Prolific standard parameter
+_prolific_pid = _as_str(_qs.get("PROLIFIC_PID", ""))
 
 if "pid" not in st.session_state and _pid_in:
     st.session_state.pid = _pid_in
@@ -79,6 +83,9 @@ if "cond" not in st.session_state and _cond_in:
     st.session_state.cond = _cond_in
 if "return_raw" not in st.session_state and _ret_in:
     st.session_state.return_raw = _ret_in
+# Store Prolific ID separately for research tracking
+if "prolific_pid" not in st.session_state and _prolific_pid:
+    st.session_state.prolific_pid = _prolific_pid
 
 # boolean flag for UI (sticky footer etc.)
 st.session_state.has_return_url = bool(st.session_state.get("return_raw", ""))  # always recompute

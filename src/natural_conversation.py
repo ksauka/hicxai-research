@@ -52,10 +52,8 @@ def _ensure_env_loaded():
 
 
 def _should_use_genai() -> bool:
+    """LLM is REQUIRED for natural conversation - always returns True if API key available."""
     _ensure_env_loaded()
-    
-    if os.getenv("HICXAI_GENAI", "on").lower() in {"0", "false", "off"}:
-        return False
     
     api_key = os.getenv("OPENAI_API_KEY")
     
@@ -68,6 +66,11 @@ def _should_use_genai() -> bool:
                 api_key = str(key)
         except Exception:
             pass
+    
+    if not api_key:
+        # Warn if missing - this is now required for quality conversation
+        import warnings
+        warnings.warn("OPENAI_API_KEY not found - conversation quality will be degraded")
     
     return bool(api_key)
 
@@ -98,12 +101,25 @@ def _get_openai_client():
         return None
 
 
-def _build_system_prompt(style: str) -> str:
-    base = (
-        "You are Luna, a friendly AI loan assistant. Rephrase the provided explanation "
-        "to be clear, warm, and helpful while preserving all factual content, numbers, and lists. "
-        "Do not fabricate data. Do not change numeric values. Avoid hedging."
-    )
+def _build_system_prompt(style: str, high_anthropomorphism: bool = True) -> str:
+    """Build system prompt respecting anthropomorphism condition."""
+    if high_anthropomorphism:
+        # Luna: Warm, friendly, conversational
+        base = (
+            "You are Luna, a friendly and warm AI loan assistant. Rephrase the provided explanation "
+            "to be clear, personable, and helpful while preserving all factual content, numbers, and lists. "
+            "Use a conversational tone, show empathy, and you may use appropriate emojis (1-2 per response). "
+            "Do not fabricate data. Do not change numeric values. Be encouraging and supportive."
+        )
+    else:
+        # AI Assistant: Professional, technical, concise
+        base = (
+            "You are a professional AI loan assistant. Rephrase the provided explanation "
+            "to be clear, direct, and informative while preserving all factual content, numbers, and lists. "
+            "Use a professional tone. No emojis. No personal language. Focus on facts and clarity. "
+            "Do not fabricate data. Do not change numeric values."
+        )
+    
     if style == "short":
         base += " Be concise (2-4 sentences)."
     elif style == "actionable":
@@ -113,8 +129,8 @@ def _build_system_prompt(style: str) -> str:
     return base
 
 
-def _compose_messages(response: str, context: Optional[Dict[str, Any]], style: str):
-    sys_prompt = _build_system_prompt(style)
+def _compose_messages(response: str, context: Optional[Dict[str, Any]], style: str, high_anthropomorphism: bool = True):
+    sys_prompt = _build_system_prompt(style, high_anthropomorphism)
     ctx_lines = []
     if context:
         for k, v in context.items():
@@ -136,19 +152,19 @@ def _compose_messages(response: str, context: Optional[Dict[str, Any]], style: s
 
 
 def enhance_validation_message(field: str, user_input: str, expected_format: str, attempt: int = 1, high_anthropomorphism: bool = True) -> Optional[str]:
-    """Generate a validation message using LLM.
+    """Generate a validation message using LLM (REQUIRED for natural conversation).
     
     Args:
         field: The field name being validated
         user_input: The invalid input provided by user
         expected_format: Description of the expected format
         attempt: Which attempt this is (1, 2, 3+)
-        high_anthropomorphism: If True, use warm/friendly tone. If False, use technical/concise tone.
+        high_anthropomorphism: If True, use warm/friendly Luna tone. If False, use professional AI Assistant tone.
     
-    Returns None if LLM is not available (fallback to hardcoded messages).
+    Returns None only if LLM fails - caller should have hardcoded fallback.
     """
     if not _should_use_genai():
-        return None
+        return None  # Will use fallback, but this should not happen in production
     
     try:
         client = _get_openai_client()
@@ -194,10 +210,16 @@ def enhance_validation_message(field: str, user_input: str, expected_format: str
         return None
 
 
-def enhance_response(response: str, context: Optional[Dict[str, Any]] = None, response_type: str = "explanation") -> str:
-    """Optionally paraphrase an explanation using OpenAI (gpt-4o-mini by default).
+def enhance_response(response: str, context: Optional[Dict[str, Any]] = None, response_type: str = "explanation", high_anthropomorphism: bool = True) -> str:
+    """Enhance response using OpenAI to respect anthropomorphism condition (REQUIRED for quality).
 
-    If OpenAI is not configured, returns the original response unchanged.
+    Args:
+        response: The original response text
+        context: Optional context dictionary 
+        response_type: Type of response (explanation, loan, etc)
+        high_anthropomorphism: If True, use warm Luna style. If False, use professional AI Assistant style.
+
+    If OpenAI is not configured, returns the original response (degraded quality).
     Style is controlled via HICXAI_STYLE: short | detailed | actionable.
     """
     if not response or not isinstance(response, str):
@@ -210,7 +232,7 @@ def enhance_response(response: str, context: Optional[Dict[str, Any]] = None, re
     try:
         # Preferred path: OpenAI SDK v1.x
         client = _get_openai_client()
-        messages = _compose_messages(response, context, style)
+        messages = _compose_messages(response, context, style, high_anthropomorphism)
         model_name = os.getenv("HICXAI_OPENAI_MODEL", "gpt-4o-mini")
         temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.2"))
         max_tokens = int(os.getenv("HICXAI_MAX_TOKENS", "300"))

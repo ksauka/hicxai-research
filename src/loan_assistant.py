@@ -464,15 +464,21 @@ class LoanAssistant:
             else:
                 formatted_explanation = str(explanation)
 
-            # Optional generative rewrite for high anthropomorphism to make responses more natural
+            # REQUIRED: Enhance response to respect anthropomorphism condition
             try:
-                if config.show_anthropomorphic and NATURAL_CONVERSATION_AVAILABLE:
+                if NATURAL_CONVERSATION_AVAILABLE:
                     context_info = {
                         'intent': intent_result.get('intent') if isinstance(locals().get('intent_result'), dict) else None,
                         'matched_question': locals().get('matched_question'),
                         'prediction': self.agent.predicted_class
                     }
-                    enhanced = enhance_response(formatted_explanation, context_info, response_type="explanation")
+                    # Pass anthropomorphism flag to LLM for appropriate tone
+                    enhanced = enhance_response(
+                        formatted_explanation, 
+                        context_info, 
+                        response_type="explanation",
+                        high_anthropomorphism=config.show_anthropomorphic
+                    )
                     if enhanced and enhanced != formatted_explanation:
                         formatted_explanation = enhanced
             except Exception as e:
