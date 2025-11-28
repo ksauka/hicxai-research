@@ -6,6 +6,111 @@ import env_loader
 # Configure page FIRST - before any other Streamlit commands
 st.set_page_config(page_title="AI Loan Assistant - Complete Solution", layout="wide")
 
+# ===== QUALTRICS/PROLIFIC INTEGRATION (loop-proof, final version) =====
+from urllib.parse import unquote, urlparse, parse_qsl, urlencode, urlunparse
+import time
+
+def _get_query_params():
+    """Streamlit-compatible query param reader."""
+    try:
+        return dict(st.query_params)
+    except Exception:
+        try:
+            return st.experimental_get_query_params()
+        except Exception:
+            return {}
+
+def _as_str(v):
+    return v[0] if isinstance(v, list) and v else (v if isinstance(v, str) else "")
+
+def _is_safe_return(ru: str) -> bool:
+    """Validate return URL points to Qualtrics."""
+    if not ru:
+        return False
+    try:
+        d = unquote(ru)
+        p = urlparse(d)
+        return p.scheme in ("http", "https") and "qualtrics.com" in p.netloc
+    except Exception:
+        return False
+
+# Read query params once
+_qs = _get_query_params()
+_pid_in   = _as_str(_qs.get("pid", ""))
+_cond_in  = _as_str(_qs.get("cond", ""))
+_ret_raw  = _as_str(_qs.get("return", ""))
+
+# Persist into session (idempotent)
+if "pid" not in st.session_state and _pid_in:
+    st.session_state.pid = _pid_in
+if "cond" not in st.session_state and _cond_in:
+    st.session_state.cond = _cond_in
+if "return_raw" not in st.session_state and _ret_raw:
+    st.session_state.return_raw = _ret_raw
+if "has_return_url" not in st.session_state:
+    st.session_state.has_return_url = bool(st.session_state.get("return_raw"))
+if "_returned" not in st.session_state:
+    st.session_state._returned = False
+
+def _build_return_url(done=True):
+    """Decode Qualtrics URL, append pid/cond/done safely."""
+    rr = st.session_state.get("return_raw")
+    if not _is_safe_return(rr):
+        return None
+    decoded = unquote(rr)
+    p = urlparse(decoded)
+    q = dict(parse_qsl(p.query))
+    q.update({
+        "pid":  st.session_state.get("pid", ""),
+        "cond": st.session_state.get("cond", ""),
+        "done": "1" if done else "0",
+    })
+    return urlunparse(p._replace(query=urlencode(q)))
+
+def back_to_survey(done_flag=True):
+    """Single exit path. Never call automatically on load."""
+    if st.session_state._returned:
+        return
+    final = _build_return_url(done=done_flag)
+    if not final:
+        st.warning("Return link missing or invalid. Please use your browser Back button.")
+        return
+    st.session_state._returned = True
+    # Dual redirect method for robustness
+    st.components.v1.html(
+        f'''
+        <meta http-equiv="refresh" content="0; url={final}">
+        <script>
+          try {{ window.location.replace("{final}"); }}
+          catch(e) {{ window.location.href="{final}"; }}
+        </script>
+        ''',
+        height=30
+    )
+
+# Make available to rest of app
+st.session_state.back_to_survey = back_to_survey
+
+# 3-minute timer: set once, never on reload
+if "deadline_ts" not in st.session_state:
+    st.session_state.deadline_ts = time.time() + 180
+
+# Optional debug panel (comment out after testing)
+# def _debug_panel():
+#     st.markdown("### 🔧 Return Debug")
+#     st.write({
+#         "pid": st.session_state.get("pid", ""),
+#         "cond": st.session_state.get("cond", ""),
+#         "return_raw": st.session_state.get("return_raw", ""),
+#         "decoded": unquote(st.session_state.get("return_raw", "")) if st.session_state.get("return_raw") else "",
+#         "final_url": _build_return_url(done=True)
+#     })
+#     if st.button("🔁 Test Return"):
+#         back_to_survey(done_flag=True)
+# _debug_panel()
+
+# ===== END QUALTRICS INTEGRATION =====
+
 # Now import everything else
 from agent import Agent
 from nlu import NLU
@@ -743,12 +848,11 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
                 with open(filename, "w") as f:
                     f.write(json.dumps(feedback_data, indent=2))
     
-    # Show "Continue to survey" button OUTSIDE the form (alternate path after feedback)
+    # Show "Continue to survey" button OUTSIDE the form (alternate after feedback)
     if st.session_state.get("feedback_submitted", False) and st.session_state.get("has_return_url", False):
         st.markdown("---")
-        if st.button("✅ Continue to the survey", type="primary", use_container_width=True, key="feedback_return"):
-            if hasattr(st.session_state, 'back_to_survey') and callable(st.session_state.back_to_survey):
-                st.session_state.back_to_survey(done_flag=True)
+        if st.button("✅ Continue to survey", type="primary", use_container_width=True, key="feedback_return"):
+            back_to_survey(done_flag=True)
 
 # Footer with dataset information
 st.markdown("---")
@@ -814,16 +918,14 @@ if os.getenv('HICXAI_DEBUG_MODE', 'false').lower() == 'true':
         st.markdown(f"**Concurrent Testing:** ✅ Enabled")
         st.markdown(f"**User Isolation:** ✅ Session-based")
 
-# Render the sticky return footer (if integration was set up by wrapper)
+# Sticky return footer (always available if return URL exists)
 if st.session_state.get("has_return_url", False):
-    import time
     st.markdown("---")
     col_a, col_b = st.columns([3, 1])
     with col_a:
-        remaining = max(0, int(st.session_state.get("deadline_ts", time.time()) - time.time()))
+        remaining = max(0, int(st.session_state.deadline_ts - time.time()))
         m, s = divmod(remaining, 60)
-        st.caption(f"⏱️ You can return to the survey at any time. Time left: {m}:{s:02d}")
+        st.caption(f"⏱️ Up to {m}:{s:02d} remaining. You can return anytime.")
     with col_b:
-        if st.button("✅ Continue to the survey", type="primary", use_container_width=True, key="footer_return"):
-            if hasattr(st.session_state, 'back_to_survey') and callable(st.session_state.back_to_survey):
-                st.session_state.back_to_survey(done_flag=True)
+        if st.button("✅ Continue to survey", type="primary", use_container_width=True, key="footer_return"):
+            back_to_survey(done_flag=True)
