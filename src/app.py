@@ -6,11 +6,11 @@ import env_loader
 # Configure page FIRST - before any other Streamlit commands
 st.set_page_config(page_title="AI Loan Assistant - Complete Solution", layout="wide")
 
-# ===== QUALTRICS RETURN (use ?return=... exactly as provided) =====
+# ===== QUALTRICS/PROLIFIC INTEGRATION (simple version - use return URL as-is) =====
 import time
-import streamlit as st
 
 def _get_query_params():
+    """Streamlit-compatible query param reader."""
     try:
         return dict(st.query_params)
     except Exception:
@@ -22,21 +22,45 @@ def _get_query_params():
 def _as_str(v):
     return v[0] if isinstance(v, list) and v else (v if isinstance(v, str) else "")
 
+# Read query params once
 _qs = _get_query_params()
+_pid_in = _as_str(_qs.get("pid", ""))
+_cond_in = _as_str(_qs.get("cond", ""))
 _ret_raw = _as_str(_qs.get("return", ""))
 
+# Persist into session (idempotent)
+if "pid" not in st.session_state and _pid_in:
+    st.session_state.pid = _pid_in
+if "cond" not in st.session_state and _cond_in:
+    st.session_state.cond = _cond_in
 if "return_raw" not in st.session_state and _ret_raw:
     st.session_state.return_raw = _ret_raw
+if "has_return_url" not in st.session_state:
+    st.session_state.has_return_url = bool(st.session_state.get("return_raw"))
 
+# 3-minute timer: set once, never on reload
 if "deadline_ts" not in st.session_state:
     st.session_state.deadline_ts = time.time() + 180
 
 def back_to_survey():
-    """Redirect back to Qualtrics using exact return URL (no modification)."""
-    final = st.session_state.get("return_raw") or ""
-    if not final:
+    """Redirect back to Qualtrics with pid, cond, and done=1 appended."""
+    from urllib.parse import unquote
+    
+    ret_raw = st.session_state.get("return_raw") or ""
+    if not ret_raw:
         st.warning("Return link missing or invalid. Please use your browser Back button.")
         return
+    
+    # Decode the return URL
+    base_url = unquote(ret_raw)
+    
+    # Get pid and cond from session
+    pid = st.session_state.get("pid", "")
+    cond = st.session_state.get("cond", "")
+    
+    # Append parameters
+    separator = "&" if "?" in base_url else "?"
+    final = f"{base_url}{separator}pid={pid}&cond={cond}&done=1"
     
     # Execute redirect immediately
     st.components.v1.html(
@@ -51,8 +75,9 @@ def back_to_survey():
     )
     st.stop()
 
+# Make available to rest of app
 st.session_state.back_to_survey = back_to_survey
-# ===== END QUALTRICS RETURN =====
+# ===== END QUALTRICS INTEGRATION =====
 
 # Now import everything else
 from agent import Agent
