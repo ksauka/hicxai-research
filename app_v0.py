@@ -1,4 +1,4 @@
-"""Entry point for Condition 0 (Control): E_none_A_low
+"""Entry point for Condition 1: E_none_A_low
 Explanation: none | Anthropomorphism: low"""
 import os, sys, streamlit as st
 os.environ['HICXAI_EXPLANATION'] = 'none'

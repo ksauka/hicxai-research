@@ -175,18 +175,36 @@ def explain_with_dtreeviz(agent, instance_df):
         }
 
 def route_to_xai_method(agent, intent_result):
-    """Route user question to appropriate XAI method based on intent"""
+    """Route user question to appropriate XAI method based on intent AND experimental condition"""
+    from ab_config import config
+    
     if isinstance(intent_result, dict) and 'intent' in intent_result:
         method = intent_result['intent']
         # Normalize common aliases
         if method in {"rule", "rules", "rule_based", "rule-based", "local_explanation"}:
             method = 'anchor'
         
+        # Check experimental condition - only provide explanations that are enabled
         if method == 'shap':
-            return explain_with_shap(agent, intent_result.get('label'))
+            if config.show_shap_visualizations:  # feature_importance condition
+                return explain_with_shap(agent, intent_result.get('label'))
+            else:
+                return {
+                    'type': 'unavailable',
+                    'explanation': "Feature importance explanations are not available in this version.",
+                    'method': 'shap_disabled'
+                }
         elif method == 'dice':
-            return explain_with_dice(agent)
+            if config.show_counterfactual:  # counterfactual condition
+                return explain_with_dice(agent)
+            else:
+                return {
+                    'type': 'unavailable',
+                    'explanation': "Counterfactual explanations are not available in this version.",
+                    'method': 'dice_disabled'
+                }
         elif method == 'anchor':
+            # Anchor is available in all conditions as baseline
             return explain_with_anchor(agent)
         else:
             return {
