@@ -32,34 +32,19 @@ if "deadline_ts" not in st.session_state:
     st.session_state.deadline_ts = time.time() + 180
 
 def back_to_survey():
+    """Redirect back to Qualtrics using exact return URL (no modification)."""
     final = st.session_state.get("return_raw") or ""
     if not final:
         st.warning("Return link missing or invalid. Please use your browser Back button.")
         return
     
-    # Save data in background (don't block redirect)
-    try:
-        if logger and hasattr(st.session_state, 'loan_assistant'):
-            app = st.session_state.loan_assistant.application
-            for field in ['age', 'workclass', 'education', 'marital_status', 'occupation', 
-                         'relationship', 'race', 'sex', 'native_country', 'hours_per_week',
-                         'capital_gain', 'capital_loss']:
-                value = getattr(app, field, None)
-                if value is not None:
-                    logger.update_application_data(field, value)
-            if hasattr(app, 'prediction'):
-                logger.set_prediction(app.prediction, getattr(app, 'prediction_probability', 0.0))
-            logger.save_to_github()
-    except:
-        pass
-    
-    # Execute redirect
+    # Execute redirect immediately
     st.components.v1.html(
         f'''
         <meta http-equiv="refresh" content="0; url={final}">
         <script>
           try {{ window.location.replace("{final}"); }}
-          catch(e) {{ window.location.href="{final}"); }}
+          catch(e) {{ window.location.href = "{final}"; }}
         </script>
         ''',
         height=0
