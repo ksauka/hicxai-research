@@ -32,6 +32,27 @@ if "deadline_ts" not in st.session_state:
     st.session_state.deadline_ts = time.time() + 180
 
 def back_to_survey():
+    # Save data before redirecting
+    if logger:
+        try:
+            # Capture application data
+            app = st.session_state.loan_assistant.application
+            for field in ['age', 'workclass', 'education', 'marital_status', 'occupation', 
+                         'relationship', 'race', 'sex', 'native_country', 'hours_per_week',
+                         'capital_gain', 'capital_loss']:
+                value = getattr(app, field, None)
+                if value is not None:
+                    logger.update_application_data(field, value)
+            
+            # Save prediction if available
+            if hasattr(app, 'prediction'):
+                logger.set_prediction(app.prediction, getattr(app, 'prediction_probability', 0.0))
+            
+            # Save data to GitHub
+            logger.save_to_github()
+        except Exception as e:
+            print(f"Data logging failed: {e}")
+    
     final = st.session_state.get("return_raw") or ""
     if not final:
         st.warning("Return link missing or invalid. Please use your browser Back button.")
@@ -41,7 +62,7 @@ def back_to_survey():
         <meta http-equiv="refresh" content="0; url={final}">
         <script>
           try {{ window.location.replace("{final}"); }}
-          catch(e) {{ window.location.href="{final}"; }}
+          catch(e) {{ window.location.href="{final}"); }}
         </script>
         ''',
         height=0
@@ -59,8 +80,12 @@ from github_saver import save_to_github
 from loan_assistant import LoanAssistant
 from ab_config import config
 from shap_visualizer import display_shap_explanation, explain_shap_visualizations
+from data_logger import init_logger
 import os
 import pandas as pd
+
+# Initialize data logger
+logger = init_logger()
 
 # Define field options for quick selection (based on actual Adult dataset analysis)
 field_options = {
@@ -558,8 +583,25 @@ if current_field and current_field in field_options:
 
 # Process user input
 if send_button and user_message:
+    # Log interaction
+    if logger:
+        current_field = getattr(st.session_state.loan_assistant, 'current_field', None)
+        logger.log_interaction("user_message", {
+            "field": current_field,
+            "input_method": "typed",
+            "content": user_message,
+            "conversation_state": st.session_state.loan_assistant.conversation_state.value
+        })
+    
     # Handle the message through loan assistant
     assistant_response = st.session_state.loan_assistant.handle_message(user_message)
+    
+    # Log assistant response
+    if logger:
+        logger.log_interaction("assistant_response", {
+            "content": assistant_response
+        })
+    
     # Add to chat history (form clears input on submit)
     st.session_state.chat_history.append((user_message, assistant_response))
     st_rerun()
@@ -567,7 +609,24 @@ if send_button and user_message:
 # Handle option clicks
 if 'option_clicked' in st.session_state and st.session_state.option_clicked:
     option_value = st.session_state.option_clicked
+    
+    # Log interaction
+    if logger:
+        current_field = getattr(st.session_state.loan_assistant, 'current_field', None)
+        logger.log_interaction("user_message", {
+            "field": current_field,
+            "input_method": "clicked",
+            "content": option_value,
+            "conversation_state": st.session_state.loan_assistant.conversation_state.value
+        })
+    
     assistant_response = st.session_state.loan_assistant.handle_message(option_value)
+    
+    # Log assistant response
+    if logger:
+        logger.log_interaction("assistant_response", {
+            "content": assistant_response
+        })
     
     # Add to chat history
     st.session_state.chat_history.append((option_value, assistant_response))
@@ -601,11 +660,15 @@ elif current_state == 'collecting_info':
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Check Progress", key="quick_progress"):
+            if logger:
+                logger.log_interaction("progress_check", {})
             response = st.session_state.loan_assistant.handle_message("review")
             st.session_state.chat_history.append(("check progress", response))
             st_rerun()
     with col2:
         if st.button("Help", key="quick_help"):
+            if logger:
+                logger.log_interaction("help_click", {})
             # Get context-aware help
             current_field = getattr(st.session_state.loan_assistant, 'current_field', None)
             if current_field:
@@ -621,6 +684,8 @@ elif current_state == 'complete':
     col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("Explain Decision", key="quick_explain"):
+            if logger:
+                logger.log_interaction("explanation_request", {"type": "decision_explanation"})
             response = st.session_state.loan_assistant.handle_message("explain")
             st.session_state.chat_history.append(("explain", response))
             st_rerun()
@@ -747,6 +812,10 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
                 "had_shap_visualizations": config.show_shap_visualizations,
                 "timestamp": pd.Timestamp.now().isoformat()
             }
+            
+            # Log feedback to data logger
+            if logger:
+                logger.set_feedback(feedback_data)
             
             # Save feedback
             try:
