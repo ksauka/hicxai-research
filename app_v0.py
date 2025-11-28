@@ -72,6 +72,9 @@ remaining = int(max(0, st.session_state.deadline_ts - time.time()))
 if st.session_state.has_return_url and remaining > 0:
     mins, secs = divmod(remaining, 60)
     st.caption(f"⏱️ You will be returned to the survey in ~{mins}:{secs:02d} unless you continue manually.")
+    # Auto-rerun every second to update countdown and check expiration
+    time.sleep(1)
+    st.rerun()
 
 if time.time() >= st.session_state.deadline_ts and st.session_state.has_return_url:
     st.info("⏰ Time limit reached. Returning you to the survey…")

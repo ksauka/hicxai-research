@@ -724,12 +724,7 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
                     
                     if success:
                         st.success("Thank you for your feedback! 🎉")
-                        
-                        # Show "Continue to survey" button if from Qualtrics/Prolific
-                        if st.session_state.get("has_return_url", False):
-                            st.markdown("---")
-                            if st.button("✅ Continue to the survey", type="primary", use_container_width=True):
-                                st.session_state.back_to_survey()
+                        st.session_state.feedback_submitted = True
                     else:
                         raise Exception("GitHub save failed")
                 else:
@@ -737,12 +732,7 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
                     
             except Exception as e:
                 st.warning("Feedback saved locally. Thank you!")
-                
-                # Show "Continue to survey" button even on fallback
-                if st.session_state.get("has_return_url", False):
-                    st.markdown("---")
-                    if st.button("✅ Continue to the survey", type="primary", use_container_width=True):
-                        st.session_state.back_to_survey()
+                st.session_state.feedback_submitted = True
                 
                 # Fallback: save to local file
                 import json
@@ -752,6 +742,12 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
                 
                 with open(filename, "w") as f:
                     f.write(json.dumps(feedback_data, indent=2))
+    
+    # Show "Continue to survey" button OUTSIDE the form
+    if st.session_state.get("feedback_submitted", False) and st.session_state.get("has_return_url", False):
+        st.markdown("---")
+        if st.button("✅ Continue to the survey", type="primary", use_container_width=True):
+            st.session_state.back_to_survey()
 
 # Footer with dataset information
 st.markdown("---")
