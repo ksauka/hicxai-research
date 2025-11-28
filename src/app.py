@@ -76,17 +76,7 @@ def back_to_survey(done_flag=True):
         st.warning("Return link missing or invalid. Please use your browser Back button.")
         return
     st.session_state._returned = True
-    # Dual redirect method for robustness
-    st.components.v1.html(
-        f'''
-        <meta http-equiv="refresh" content="0; url={final}">
-        <script>
-          try {{ window.location.replace("{final}"); }}
-          catch(e) {{ window.location.href="{final}"; }}
-        </script>
-        ''',
-        height=30
-    )
+    # The redirect will be handled on next rerun by the catch block at top
 
 # Make available to rest of app
 st.session_state.back_to_survey = back_to_survey
@@ -95,15 +85,28 @@ st.session_state.back_to_survey = back_to_survey
 if st.session_state.get("_returned"):
     final = _build_return_url(done=True)
     if final:
+        # Use multiple redirect methods for maximum compatibility
+        st.markdown(f'<meta http-equiv="refresh" content="0;url={final}">', unsafe_allow_html=True)
         st.components.v1.html(
             f'''
-            <meta http-equiv="refresh" content="0; url={final}">
             <script>
-              window.parent.location.href = "{final}";
+              // Try all possible redirect methods
+              if (window.top !== window.self) {{
+                // We're in an iframe - redirect parent
+                window.top.location.href = "{final}";
+              }} else {{
+                // We're not in iframe - redirect directly
+                window.location.replace("{final}");
+              }}
             </script>
             ''',
-            height=30
+            height=0
         )
+        st.markdown(f"""
+        ### 🔄 Redirecting to survey...
+        
+        If you're not redirected automatically, [click here]({final}).
+        """)
         st.stop()
 
 # 3-minute timer: set once, never on reload
@@ -111,18 +114,19 @@ if "deadline_ts" not in st.session_state:
     st.session_state.deadline_ts = time.time() + 180
 
 # Optional debug panel (comment out after testing)
-# def _debug_panel():
-#     st.markdown("### 🔧 Return Debug")
-#     st.write({
-#         "pid": st.session_state.get("pid", ""),
-#         "cond": st.session_state.get("cond", ""),
-#         "return_raw": st.session_state.get("return_raw", ""),
-#         "decoded": unquote(st.session_state.get("return_raw", "")) if st.session_state.get("return_raw") else "",
-#         "final_url": _build_return_url(done=True)
-#     })
-#     if st.button("🔁 Test Return"):
-#         back_to_survey(done_flag=True)
-# _debug_panel()
+def _debug_panel():
+    st.markdown("### 🔧 Return Debug")
+    st.write({
+        "pid": st.session_state.get("pid", ""),
+        "cond": st.session_state.get("cond", ""),
+        "return_raw": st.session_state.get("return_raw", ""),
+        "decoded": unquote(st.session_state.get("return_raw", "")) if st.session_state.get("return_raw") else "",
+        "final_url": _build_return_url(done=True),
+        "_returned": st.session_state.get("_returned", False)
+    })
+    if st.button("🔁 Test Return"):
+        back_to_survey(done_flag=True)
+_debug_panel()
 
 # ===== END QUALTRICS INTEGRATION =====
 
