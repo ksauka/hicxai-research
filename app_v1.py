@@ -15,33 +15,63 @@ os.environ['HICXAI_ANTHRO'] = 'high'
 os.environ['HICXAI_VERSION'] = 'v1'
 
 # ===== QUALTRICS/PROLIFIC INTEGRATION =====
-# Read query parameters from Qualtrics
-qs = st.query_params
-pid = qs.get("pid", "")
-cond = qs.get("cond", "")
-return_url = qs.get("return", "")  # URL-encoded Qualtrics return URL with ?stage=post
+import urllib.parse
 
-def back_to_survey():
-    """Return participant to Qualtrics survey"""
-    if not return_url:
+def _get_query_params():
+    try:
+        return dict(st.query_params)
+    except Exception:
+        try:
+            return st.experimental_get_query_params()
+        except Exception:
+            return {}
+
+def _as_str(v):
+    return v[0] if isinstance(v, list) and v else (v if isinstance(v, str) else "")
+
+_qs = _get_query_params()
+pid = _as_str(_qs.get("pid", ""))
+cond = _as_str(_qs.get("cond", ""))
+return_url = _as_str(_qs.get("return", ""))
+
+if "has_return_url" not in st.session_state:
+    st.session_state.has_return_url = bool(return_url)
+if "pid" not in st.session_state and pid:
+    st.session_state.pid = pid
+if "cond" not in st.session_state and cond:
+    st.session_state.cond = cond
+if "return_url" not in st.session_state and return_url:
+    st.session_state.return_url = return_url
+if "_returned" not in st.session_state:
+    st.session_state._returned = False
+
+def back_to_survey(done_flag=True):
+    if st.session_state._returned:
+        return
+    ru = st.session_state.get("return_url") or return_url
+    if not ru:
         st.warning("Return link missing. Please use your browser Back button to return to the survey.")
         return
-    final = f"{return_url}&pid={pid}&cond={cond}&done=1"
+    d = "1" if done_flag else "0"
+    _pid = st.session_state.get("pid", pid)
+    _cond = st.session_state.get("cond", cond)
+    final = f"{ru}&pid={urllib.parse.quote_plus(_pid or '')}&cond={urllib.parse.quote_plus(_cond or '')}&done={d}"
+    st.session_state._returned = True
     st.components.v1.html(f'<script>window.location.replace("{final}");</script>', height=0)
 
-# Store in session state for access from main app
-if "back_to_survey" not in st.session_state:
-    st.session_state.back_to_survey = back_to_survey
-    st.session_state.has_return_url = bool(return_url)
+st.session_state.back_to_survey = back_to_survey
 
-# Initialize timer: 3-minute cap (180 seconds)
-if "deadline" not in st.session_state:
-    st.session_state.deadline = time.time() + 180
+if "deadline_ts" not in st.session_state:
+    st.session_state.deadline_ts = time.time() + 180
 
-# Auto-return when time limit reached
-if time.time() >= st.session_state.deadline:
-    st.info("⏰ Time limit reached. Returning you to the survey...")
-    back_to_survey()
+remaining = int(max(0, st.session_state.deadline_ts - time.time()))
+if st.session_state.has_return_url and remaining > 0:
+    mins, secs = divmod(remaining, 60)
+    st.caption(f"⏱️ You will be returned to the survey in ~{mins}:{secs:02d} unless you continue manually.")
+
+if time.time() >= st.session_state.deadline_ts and st.session_state.has_return_url:
+    st.info("⏰ Time limit reached. Returning you to the survey…")
+    back_to_survey(done_flag=True)
     st.stop()
 # ===== END QUALTRICS INTEGRATION =====
 
