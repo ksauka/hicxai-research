@@ -123,7 +123,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
             explanation += "\nThese suggestions are based on patterns we've seen in approved applications."
             # Only show What-If Lab hint for high anthropomorphism (condition 4)
             if config.show_anthropomorphic:
-                explanation += "\n\n🔧 **Want to explore more?** Try the What-If Lab below to see how different changes would affect your application in real-time!"
+                explanation += "\n\n🔧 **Want to explore more?** Try the What-If Lab in the sidebar to see how different changes would affect your application in real-time!"
         else:
             explanation = "💡 **What might change the outcome?**\n\n"
             explanation += "If circumstances were different, here are factors that could affect the decision:\n\n"
@@ -132,7 +132,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
             explanation += "\nThese insights come from analyzing similar application patterns."
             # Only show What-If Lab hint for high anthropomorphism (condition 4)
             if config.show_anthropomorphic:
-                explanation += "\n\n🔧 **Want to explore more?** Try the What-If Lab below to test different scenarios!"
+                explanation += "\n\n🔧 **Want to explore more?** Try the What-If Lab in the sidebar to test different scenarios!"
         
         return {
             'type': 'dice',
