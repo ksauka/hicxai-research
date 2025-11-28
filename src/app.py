@@ -91,6 +91,21 @@ def back_to_survey(done_flag=True):
 # Make available to rest of app
 st.session_state.back_to_survey = back_to_survey
 
+# Check if redirect was triggered - execute immediately before anything else renders
+if st.session_state.get("_returned"):
+    final = _build_return_url(done=True)
+    if final:
+        st.components.v1.html(
+            f'''
+            <meta http-equiv="refresh" content="0; url={final}">
+            <script>
+              window.parent.location.href = "{final}";
+            </script>
+            ''',
+            height=30
+        )
+        st.stop()
+
 # 3-minute timer: set once, never on reload
 if "deadline_ts" not in st.session_state:
     st.session_state.deadline_ts = time.time() + 180
