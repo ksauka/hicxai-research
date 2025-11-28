@@ -747,7 +747,8 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
     if st.session_state.get("feedback_submitted", False) and st.session_state.get("has_return_url", False):
         st.markdown("---")
         if st.button("✅ Continue to the survey", type="primary", use_container_width=True, key="feedback_return"):
-            st.session_state.back_to_survey(done=True)
+            if hasattr(st.session_state, 'back_to_survey') and callable(st.session_state.back_to_survey):
+                st.session_state.back_to_survey(done_flag=True)
 
 # Footer with dataset information
 st.markdown("---")
@@ -824,5 +825,5 @@ if st.session_state.get("has_return_url", False):
         st.caption(f"⏱️ You can return to the survey at any time. Time left: {m}:{s:02d}")
     with col_b:
         if st.button("✅ Continue to the survey", type="primary", use_container_width=True, key="footer_return"):
-            if hasattr(st.session_state, 'back_to_survey'):
-                st.session_state.back_to_survey(done=True)
+            if hasattr(st.session_state, 'back_to_survey') and callable(st.session_state.back_to_survey):
+                st.session_state.back_to_survey(done_flag=True)
