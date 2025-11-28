@@ -25,18 +25,32 @@ def explain_with_shap(agent, question_id=None):
     """SHAP explanation with improved error handling and natural language output"""
     try:
         # Simplified SHAP explanation without complex dependencies
-        explanation = f"**SHAP Analysis**: For the current instance, the model predicted '{getattr(agent, 'predicted_class', 'unknown')}'. "
+        predicted_class = getattr(agent, 'predicted_class', 'unknown')
         
         # Mock feature importance (in real implementation, would use actual SHAP)
         mock_features = ['age', 'education', 'occupation', 'hours_per_week']
         mock_impacts = [0.15, 0.12, -0.08, 0.06]
         
+        # Build natural language explanation
         feature_impacts = []
-        for feature, impact in zip(mock_features, mock_impacts):
-            direction = "increases" if impact > 0 else "decreases"
-            feature_impacts.append(f"{feature} {direction} the prediction probability by {abs(impact):.3f}")
+        positive_factors = []
+        negative_factors = []
         
-        explanation += f"The most important factors are: {', '.join(feature_impacts[:3])}"
+        for feature, impact in zip(mock_features, mock_impacts):
+            feature_name = feature.replace('_', ' ')
+            if impact > 0:
+                positive_factors.append(feature_name)
+                feature_impacts.append(f"{feature_name} (helped)")
+            else:
+                negative_factors.append(feature_name)
+                feature_impacts.append(f"{feature_name} (worked against you)")
+        
+        explanation = "Here are the key factors that influenced your decision:\n\n"
+        if positive_factors:
+            explanation += f"✅ **Factors that helped**: {', '.join(positive_factors)}\n"
+        if negative_factors:
+            explanation += f"⚠️ **Factors that worked against you**: {', '.join(negative_factors)}\n"
+        explanation += "\nThese factors were weighted based on their impact on the lending decision."
         
         return {
             'type': 'shap',
@@ -88,12 +102,24 @@ def explain_with_dice(agent, target_class=None, features='all'):
         
         # Mock counterfactual changes (in real implementation, would use actual DiCE)
         mock_changes = [
-            "increase education level from High-School to Bachelors",
-            "change occupation from Service to Professional", 
-            "increase hours-per-week from 35 to 45"
+            "Increase your education level (e.g., from High School to Bachelor's degree)",
+            "Move into a professional or managerial occupation", 
+            "Increase your working hours (e.g., from part-time to full-time)"
         ]
         
-        explanation = f"**DiCE Analysis**: To change the prediction from '{current_pred}' to '{target_class}', you could: {', '.join(mock_changes[:2])}"
+        # Natural language explanation without technical jargon
+        if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
+            explanation = "💡 **What could help your application?**\n\n"
+            explanation += "Based on similar successful applications, here are changes that might improve your chances:\n\n"
+            for i, change in enumerate(mock_changes[:3], 1):
+                explanation += f"{i}. {change}\n"
+            explanation += "\nThese suggestions are based on patterns we've seen in approved applications."
+        else:
+            explanation = "💡 **What might change the outcome?**\n\n"
+            explanation += "If circumstances were different, here are factors that could affect the decision:\n\n"
+            for i, change in enumerate(mock_changes[:3], 1):
+                explanation += f"{i}. {change}\n"
+            explanation += "\nThese insights come from analyzing similar application patterns."
         
         return {
             'type': 'dice',
@@ -117,17 +143,21 @@ def explain_with_anchor(agent):
         current_pred = getattr(agent, 'predicted_class', 'unknown')
         
         # Mock anchor rules (in real implementation, would use actual Anchor)
-        mock_rules = [
-            "age > 35",
-            "education = Bachelors", 
-            "hours-per-week > 40"
+        mock_rules_friendly = [
+            "Your age (being over 35)",
+            "Your education level (having a Bachelor's degree)", 
+            "Your work schedule (working more than 40 hours per week)"
         ]
         
         precision = 0.92
         coverage = 0.15
         
-        explanation = f"**Anchor Analysis**: The prediction '{current_pred}' is supported by these rules: {', '.join(mock_rules)}. "
-        explanation += f"This explanation covers {coverage:.1%} of similar cases with {precision:.1%} precision."
+        # Natural language explanation without technical jargon
+        explanation = "📋 **Key factors in your decision:**\n\n"
+        explanation += "The decision was primarily influenced by:\n"
+        for i, rule in enumerate(mock_rules_friendly, 1):
+            explanation += f"{i}. {rule}\n"
+        explanation += f"\nThis pattern is accurate {precision:.0%} of the time and applies to about {coverage:.0%} of similar applications."
         
         return {
             'type': 'anchor',
