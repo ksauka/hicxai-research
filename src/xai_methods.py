@@ -45,12 +45,17 @@ def explain_with_shap(agent, question_id=None):
                 negative_factors.append(feature_name)
                 feature_impacts.append(f"{feature_name} (worked against you)")
         
+        from ab_config import config
+        
         explanation = "Here are the key factors that influenced your decision:\n\n"
         if positive_factors:
             explanation += f"✅ **Factors that helped**: {', '.join(positive_factors)}\n"
         if negative_factors:
             explanation += f"⚠️ **Factors that worked against you**: {', '.join(negative_factors)}\n"
         explanation += "\nThese factors were weighted based on their impact on the lending decision."
+        # Only show visualization hint for high anthropomorphism (condition 6)
+        if config.show_anthropomorphic:
+            explanation += "\n\n📊 **Want to see more details?** Check out the interactive visualizations below to explore how each factor contributed to your decision!"
         
         return {
             'type': 'shap',
@@ -96,6 +101,8 @@ def explain_with_shap_advanced(agent, instance_df):
 def explain_with_dice(agent, target_class=None, features='all'):
     """DiCE counterfactuals with natural language explanations"""
     try:
+        from ab_config import config
+        
         # Simplified DiCE explanation without complex dependencies
         current_pred = getattr(agent, 'predicted_class', 'unknown')
         target_class = target_class or ('<=50K' if current_pred == '>50K' else '>50K')
@@ -114,12 +121,18 @@ def explain_with_dice(agent, target_class=None, features='all'):
             for i, change in enumerate(mock_changes[:3], 1):
                 explanation += f"{i}. {change}\n"
             explanation += "\nThese suggestions are based on patterns we've seen in approved applications."
+            # Only show What-If Lab hint for high anthropomorphism (condition 4)
+            if config.show_anthropomorphic:
+                explanation += "\n\n🔧 **Want to explore more?** Try the What-If Lab below to see how different changes would affect your application in real-time!"
         else:
             explanation = "💡 **What might change the outcome?**\n\n"
             explanation += "If circumstances were different, here are factors that could affect the decision:\n\n"
             for i, change in enumerate(mock_changes[:3], 1):
                 explanation += f"{i}. {change}\n"
             explanation += "\nThese insights come from analyzing similar application patterns."
+            # Only show What-If Lab hint for high anthropomorphism (condition 4)
+            if config.show_anthropomorphic:
+                explanation += "\n\n🔧 **Want to explore more?** Try the What-If Lab below to test different scenarios!"
         
         return {
             'type': 'dice',
