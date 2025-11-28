@@ -69,7 +69,8 @@ def back_to_survey(done_flag=True):
         st.warning("Return link missing. Please use your browser Back button to return to the survey.")
         return
     st.session_state._returned = True
-    st.components.v1.html(f'<script>window.location.replace("{final}");</script>', height=0)
+    # Use visible height to ensure redirect executes
+    st.components.v1.html(f'<script>window.location.replace("{final}");</script>', height=30)
 
 st.session_state.back_to_survey = back_to_survey
 
@@ -81,13 +82,13 @@ if "deadline_ts" not in st.session_state:
 if time.time() >= st.session_state.deadline_ts and st.session_state.has_return_url:
     st.info("⏰ Time limit reached. Returning you to the survey…")
     back_to_survey(done_flag=True)
-    st.stop()
+    # Don't use st.stop() - let redirect execute
 
-# Optional status line (no auto JS redirect)
+# Sidebar timer (visible when scrolling)
 remaining = max(0, int(st.session_state.deadline_ts - time.time()))
 mins, secs = divmod(remaining, 60)
 if st.session_state.has_return_url:
-    st.caption(f"⏱️ Up to {mins}:{secs:02d} remaining. You can continue manually when finished.")
+    st.sidebar.caption(f"⏱️ Up to {mins}:{secs:02d} remaining. You can continue manually when finished.")
 # ===== END INTEGRATION =====
 
 # Add src to path and run main app
