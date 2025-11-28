@@ -6,78 +6,118 @@ import env_loader
 # Configure page FIRST - before any other Streamlit commands
 st.set_page_config(page_title="AI Loan Assistant - Complete Solution", layout="wide")
 
-# ===== QUALTRICS/PROLIFIC INTEGRATION (simple version - use return URL as-is) =====
+# ===== QUALTRICS/PROLIFIC INTEGRATION (robust final) =====
 import time
+from urllib.parse import unquote, urlparse, parse_qsl, urlencode, urlunparse
 
 def _get_query_params():
-    """Streamlit-compatible query param reader."""
     try:
+        # Streamlit ≥1.32
         return dict(st.query_params)
     except Exception:
         try:
+            # Older Streamlit
             return st.experimental_get_query_params()
         except Exception:
             return {}
 
 def _as_str(v):
-    return v[0] if isinstance(v, list) and v else (v if isinstance(v, str) else "")
+    if isinstance(v, list):
+        return v[0] if v else ""
+    return v if isinstance(v, str) else ""
 
-# Read query params once
-_qs = _get_query_params()
-_pid_in = _as_str(_qs.get("pid", ""))
+def _is_safe_return(ru: str) -> bool:
+    """Allow https/http + any *.qualtrics.com netloc (handles regional subdomains)."""
+    if not ru:
+        return False
+    try:
+        d = unquote(ru)
+        # tolerate missing scheme (rare). Qualtrics links should always be https
+        if not d.startswith(("http://", "https://")):
+            d = "https://" + d
+        p = urlparse(d)
+        return (p.scheme in ("http", "https")) and ("qualtrics.com" in p.netloc)
+    except Exception:
+        return False
+
+def _build_final_return(done=True):
+    """
+    Start with the encoded Qualtrics 'return' URL, decode once,
+    ensure it points to Qualtrics, then append pid/cond/done IFF missing.
+    """
+    rr = st.session_state.get("return_raw", "")
+    if not rr or not _is_safe_return(rr):
+        return None
+
+    decoded = unquote(rr)
+    # normalize scheme if missing (defensive)
+    if not decoded.startswith(("http://", "https://")):
+        decoded = "https://" + decoded
+
+    p = urlparse(decoded)
+    q = dict(parse_qsl(p.query, keep_blank_values=True))
+
+    # only add if not already present
+    pid_ss  = st.session_state.get("pid", "")
+    cond_ss = st.session_state.get("cond", "")
+
+    if "pid"  not in q and pid_ss:  q["pid"]  = pid_ss
+    if "cond" not in q and cond_ss: q["cond"] = cond_ss
+    if "done" not in q:             q["done"] = "1" if done else "0"
+
+    return urlunparse(p._replace(query=urlencode(q, doseq=True)))
+
+# -------------- read & persist params once --------------
+_qs      = _get_query_params()
+_pid_in  = _as_str(_qs.get("pid", ""))
 _cond_in = _as_str(_qs.get("cond", ""))
-_ret_raw = _as_str(_qs.get("return", ""))
+_ret_in  = _as_str(_qs.get("return", ""))
 
-# Persist into session (idempotent)
 if "pid" not in st.session_state and _pid_in:
     st.session_state.pid = _pid_in
 if "cond" not in st.session_state and _cond_in:
     st.session_state.cond = _cond_in
-if "return_raw" not in st.session_state and _ret_raw:
-    st.session_state.return_raw = _ret_raw
-if "has_return_url" not in st.session_state:
-    st.session_state.has_return_url = bool(st.session_state.get("return_raw"))
+if "return_raw" not in st.session_state and _ret_in:
+    st.session_state.return_raw = _ret_in
 
-# 3-minute timer: set once, never on reload
+# boolean flag for UI (sticky footer etc.)
+st.session_state.has_return_url = bool(st.session_state.get("return_raw", ""))  # always recompute
+
+# one-shot redirect latch
+if "_returned" not in st.session_state:
+    st.session_state._returned = False
+
+def back_to_survey(done_flag=True):
+    """Single exit path. Call on button click or timeout."""
+    if st.session_state._returned:
+        return
+    final = _build_final_return(done=done_flag)
+    if not final:
+        st.warning("Return link missing or invalid. Please use your browser Back button.")
+        return
+    st.session_state._returned = True
+    # immediate redirect – robust & no loops
+    st.markdown(f'<meta http-equiv="refresh" content="0;url={final}">', unsafe_allow_html=True)
+    st.stop()
+
+# handle previously latched redirect (e.g., if Streamlit re-renders mid-redirect)
+if st.session_state.get("_returned"):
+    final = _build_final_return(done=True)
+    if final:
+        st.markdown(f'<meta http-equiv="refresh" content="0;url={final}">', unsafe_allow_html=True)
+        st.stop()
+
+# set the 3-minute deadline once
 if "deadline_ts" not in st.session_state:
     st.session_state.deadline_ts = time.time() + 180
 
-def back_to_survey():
-    """Redirect back to Qualtrics with pid, cond, and done=1 appended."""
-    from urllib.parse import unquote
-    
-    ret_raw = st.session_state.get("return_raw") or ""
-    if not ret_raw:
-        st.warning("Return link missing or invalid. Please use your browser Back button.")
-        return
-    
-    # Decode the return URL
-    base_url = unquote(ret_raw)
-    
-    # Get pid and cond from session
-    pid = st.session_state.get("pid", "")
-    cond = st.session_state.get("cond", "")
-    
-    # Append parameters
-    separator = "&" if "?" in base_url else "?"
-    final = f"{base_url}{separator}pid={pid}&cond={cond}&done=1"
-    
-    # Execute redirect immediately
-    st.components.v1.html(
-        f'''
-        <meta http-equiv="refresh" content="0; url={final}">
-        <script>
-          try {{ window.location.replace("{final}"); }}
-          catch(e) {{ window.location.href = "{final}"; }}
-        </script>
-        ''',
-        height=0
-    )
-    st.stop()
+# fire auto-return when time is up (exactly once)
+if time.time() >= st.session_state.deadline_ts:
+    back_to_survey(done_flag=True)
 
-# Make available to rest of app
+# expose the function for UI buttons
 st.session_state.back_to_survey = back_to_survey
-# ===== END QUALTRICS INTEGRATION =====
+# ===== END QUALTRICS/PROLIFIC INTEGRATION =====
 
 # Now import everything else
 from agent import Agent
