@@ -426,17 +426,20 @@ class LoanAssistant:
                             inferred_method = 'shap'
                     
                     # CRITICAL: Remap to available explanation method for this experimental condition
-                    # The classifier may classify user intent as SHAP or DiCE based on their question,
-                    # but we must only provide the explanation type enabled in their condition
+                    # Force all explanation requests to use the method enabled for this condition
+                    inferred_method = inferred_method.lower().strip()  # Normalize
+                    
                     if config.explanation == 'counterfactual':
-                        # Conditions 3-4: Only counterfactual (DiCE) explanations available
-                        # Map any explanation request (shap, general) to DiCE
-                        if inferred_method in ['shap', 'general']:
+                        # Conditions 3-4: Only counterfactual (DiCE) available
+                        # Map ANYTHING except anchor to DiCE
+                        if inferred_method != 'anchor':
+                            print(f"🔍 DEBUG MAIN: Remapping '{inferred_method}' → 'dice' for counterfactual condition")
                             inferred_method = 'dice'
                     elif config.explanation == 'feature_importance':
-                        # Conditions 5-6: Only feature importance (SHAP) explanations available
-                        # Map any explanation request (dice, general) to SHAP
-                        if inferred_method in ['dice', 'general']:
+                        # Conditions 5-6: Only feature importance (SHAP) available
+                        # Map ANYTHING except anchor to SHAP
+                        if inferred_method != 'anchor':
+                            print(f"🔍 DEBUG MAIN: Remapping '{inferred_method}' → 'shap' for feature_importance condition")
                             inferred_method = 'shap'
                     # Note: 'anchor' is always available as a baseline in all conditions
 
@@ -469,7 +472,59 @@ class LoanAssistant:
                 
             else:
                 # No good match found - fallback to general agent
-                explanation = self.agent.handle_user_input(user_input)
+                # But first apply remapping for experimental conditions
+                try:
+                    print(f"🔍 DEBUG FALLBACK PATH: user_input='{user_input}'")
+                    print(f"🔍 DEBUG CONFIG: explanation={config.explanation}, show_shap={config.show_shap_visualizations}, show_counterfactual={config.show_counterfactual}")
+                    
+                    intent_result_fallback, confidence, suggestions = self.agent.nlu_model.classify_intent(user_input)
+                    
+                    print(f"🔍 DEBUG FALLBACK: classify_intent returned: {intent_result_fallback}")
+                    
+                    if isinstance(intent_result_fallback, dict) and 'intent' in intent_result_fallback:
+                        inferred_method = intent_result_fallback['intent'].lower().strip()
+                        
+                        print(f"🔍 DEBUG FALLBACK: Original intent: '{inferred_method}'")
+                        print(f"🔍 DEBUG FALLBACK: Config explanation: '{config.explanation}'")
+                        
+                        # CRITICAL: Remap to available explanation method for this experimental condition
+                        # Force all explanation requests to use the method enabled for this condition
+                        if config.explanation == 'counterfactual':
+                            # Conditions 3-4: Only counterfactual (DiCE) available
+                            # Map ANYTHING except anchor to DiCE
+                            if inferred_method != 'anchor':
+                                print(f"🔍 DEBUG FALLBACK: Remapping '{inferred_method}' → 'dice' for counterfactual condition")
+                                inferred_method = 'dice'
+                        elif config.explanation == 'feature_importance':
+                            # Conditions 5-6: Only feature importance (SHAP) available
+                            # Map ANYTHING except anchor to SHAP
+                            if inferred_method != 'anchor':
+                                print(f"🔍 DEBUG FALLBACK: Remapping '{inferred_method}' → 'shap' for feature_importance condition")
+                                inferred_method = 'shap'
+                        
+                        print(f"🔍 DEBUG FALLBACK: Final method after remapping: '{inferred_method}'")
+                        
+                        # Update the intent in the result
+                        intent_result_fallback['intent'] = inferred_method
+                        
+                        # Route directly to XAI method with remapped intent
+                        from xai_methods import route_to_xai_method
+                        explanation_result = route_to_xai_method(self.agent, intent_result_fallback)
+                        explanation = explanation_result.get('explanation', 'Sorry, I could not generate an explanation.')
+                        
+                        # Store SHAP results if applicable
+                        if (inferred_method == 'shap' and 
+                            isinstance(explanation_result, dict) and 
+                            ('feature_impacts' in explanation_result or 'shap_values' in explanation_result)):
+                            self.last_shap_result = explanation_result
+                        else:
+                            self.last_shap_result = None
+                    else:
+                        # Truly couldn't classify - use original fallback
+                        explanation = self.agent.handle_user_input(user_input)
+                except Exception as e:
+                    print(f"🔍 DEBUG FALLBACK ERROR: {str(e)}")
+                    explanation = self.agent.handle_user_input(user_input)
             
             # Format the explanation nicely
             if isinstance(explanation, dict) and 'explanation' in explanation:
@@ -482,8 +537,11 @@ class LoanAssistant:
             # REQUIRED: Enhance response to respect anthropomorphism condition
             try:
                 if NATURAL_CONVERSATION_AVAILABLE:
+                    # Get the intent result from either path (main or fallback)
+                    final_intent_result = locals().get('intent_result_fallback') or locals().get('intent_result')
+                    
                     context_info = {
-                        'intent': intent_result.get('intent') if isinstance(locals().get('intent_result'), dict) else None,
+                        'intent': final_intent_result.get('intent') if isinstance(final_intent_result, dict) else None,
                         'matched_question': locals().get('matched_question'),
                         'prediction': self.agent.predicted_class
                     }
