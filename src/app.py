@@ -124,6 +124,13 @@ if time.time() >= st.session_state.deadline_ts:
 
 # expose the function for UI buttons
 st.session_state.back_to_survey = back_to_survey
+
+# Prevent restart via browser refresh/back - redirect to survey if user has started
+if "loan_assistant" not in st.session_state and st.session_state.get("return_raw"):
+    # User refreshed or went back - they've lost their session
+    # Redirect them back to survey rather than starting over
+    back_to_survey(done_flag=True)
+
 # ===== END QUALTRICS/PROLIFIC INTEGRATION =====
 
 # Now import everything else
@@ -421,13 +428,7 @@ st.markdown("---")
 
 # Sidebar - keep minimal to avoid distracting from experimental task
 with st.sidebar:
-    # Only show restart option - remove progress tracker to reduce confusion
-    st.markdown("**Actions**")
-    if st.button("🔄 Start New Application", key="sidebar_restart", use_container_width=True):
-        st.session_state.loan_assistant = LoanAssistant(agent)
-        st.session_state.chat_history = []
-        st_rerun()
-    
+    # No restart option - users should complete one application per session
     # Explanation style is controlled by the experimental condition, not user choice
     
     # A/B Testing Debug Info (only for development/testing - hidden from users)
@@ -735,21 +736,16 @@ elif current_state == 'collecting_info':
             st_rerun()
 
 elif current_state == 'complete':
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
-        if st.button("Explain Decision", key="quick_explain"):
+        if st.button("Explain Decision", key="quick_explain", use_container_width=True):
             if logger:
                 logger.log_interaction("explanation_request", {"type": "decision_explanation"})
             response = st.session_state.loan_assistant.handle_message("explain")
             st.session_state.chat_history.append(("explain", response))
             st_rerun()
     with col2:
-        if st.button("New Application", key="quick_new"):
-            response = st.session_state.loan_assistant.handle_message("new")
-            st.session_state.chat_history.append(("new application", response))
-            st_rerun()
-    with col3:
-        if st.button("🔧 What If Analysis", key="quick_whatif"):
+        if st.button("🔧 What If Analysis", key="quick_whatif", use_container_width=True):
             # Turn on What‑if Lab and prompt guidance
             try:
                 st.session_state.loan_assistant.show_what_if_lab = True
