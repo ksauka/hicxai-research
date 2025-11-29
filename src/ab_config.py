@@ -44,7 +44,7 @@ class AppConfig:
         # derived feature flags for UI rendering, explanations, and logging
         self.show_anthropomorphic   = (self.anthro == "high")
         self.show_profile_pic       = self.show_anthropomorphic
-        self.show_shap_visualizations = (self.explanation == "feature_importance")
+        self.show_shap_visualizations = (self.explanation == "feature_importance" and self.anthro == "high")
         self.show_counterfactual    = (self.explanation == "counterfactual")
         self.show_any_explanation   = (self.explanation != "none")
 
