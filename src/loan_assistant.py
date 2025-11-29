@@ -231,41 +231,75 @@ class LoanAssistant:
         """Handle initial greeting and start application process"""
         greeting_keywords = ['hi', 'hello', 'hey', 'start', 'apply', 'loan', 'application']
         
-        if any(keyword in user_input.lower() for keyword in greeting_keywords) or user_input.lower() in ['yes', 'y']:
-            self.conversation_state = ConversationState.COLLECTING_INFO
-            return ("Hello! I'm Luna, your personal loan application assistant. I will process your information and provide you with your loan qualification results. If you have any questions about the results, feel free to ask.\n\n"
-                   "**I will collect information step by step** (not all at once) and you can **track your progress on the Progress Tracker** in the sidebar:\n"
-                   "• **Step 1-2:** Personal Information (Age, Gender, etc.)\n"
-                   "• **Step 3-5:** Employment Details (Work Class, Occupation, Hours)\n"
-                   "• **Step 6:** Education Level\n"
-                   "• **Step 7-8:** Financial Information (Capital Gains/Losses)\n"
-                   "• **Step 9-10:** Background & Relationship Status\n\n"
-                   "**Check the blue progress bar on the left to see your completion status!**\n\n"
-                   "Let's start with **Step 1:**\n\n" + self._get_next_question())
+        if config.show_anthropomorphic:
+            # High anthropomorphism: Warm, personal, conversational
+            if any(keyword in user_input.lower() for keyword in greeting_keywords) or user_input.lower() in ['yes', 'y']:
+                self.conversation_state = ConversationState.COLLECTING_INFO
+                return ("Hello! I'm Luna, your personal loan application assistant. 😊 I will process your information and provide you with your loan qualification results. If you have any questions about the results, feel free to ask!\n\n"
+                       "**I will collect information step by step** (not all at once) and you can **track your progress on the Progress Tracker** in the sidebar:\n"
+                       "• **Step 1-2:** Personal Information (Age, Gender, etc.)\n"
+                       "• **Step 3-5:** Employment Details (Work Class, Occupation, Hours)\n"
+                       "• **Step 6:** Education Level\n"
+                       "• **Step 7-8:** Financial Information (Capital Gains/Losses)\n"
+                       "• **Step 9-10:** Background & Relationship Status\n\n"
+                       "**Check the blue progress bar on the left to see your completion status!**\n\n"
+                       "Let's start with **Step 1:**\n\n" + self._get_next_question())
+            else:
+                return ("Hi there! I'm Luna, your personal loan application assistant. 😊 I will process your information and provide you with your loan qualification results. If you have any questions about the results, feel free to ask!\n\n"
+                       "**I will collect your information step by step** (not all at once) and you can **track your progress on the Progress Tracker** in the sidebar:\n"
+                       "• **Step 1-2:** Personal Information (Age, Gender, etc.)\n"
+                       "• **Step 3-5:** Employment Details (Work Class, Occupation, Hours)\n"
+                       "• **Step 6:** Education Level\n"
+                       "• **Step 7-8:** Financial Information (Capital Gains/Losses)\n"
+                       "• **Step 9-10:** Background & Relationship Status\n\n"
+                       "**Watch the blue progress bar fill up as we complete each step!**\n\n"
+                       "Would you like to start your loan application? Just say 'yes' or 'start' to begin!")
         else:
-            return ("Hi there! I'm Luna, your personal loan application assistant. I will process your information and provide you with your loan qualification results. If you have any questions about the results, feel free to ask.\n\n"
-                   "**I will collect your information step by step** (not all at once) and you can **track your progress on the Progress Tracker** in the sidebar:\n"
-                   "• **Step 1-2:** Personal Information (Age, Gender, etc.)\n"
-                   "• **Step 3-5:** Employment Details (Work Class, Occupation, Hours)\n"
-                   "• **Step 6:** Education Level\n"
-                   "• **Step 7-8:** Financial Information (Capital Gains/Losses)\n"
-                   "• **Step 9-10:** Background & Relationship Status\n\n"
-                   "**Watch the blue progress bar fill up as we complete each step!**\n\n"
-                   "Would you like to start your loan application? Just say 'yes' or 'start' to begin!")
+            # Low anthropomorphism: Technical, concise, machine-like
+            if any(keyword in user_input.lower() for keyword in greeting_keywords) or user_input.lower() in ['yes', 'y']:
+                self.conversation_state = ConversationState.COLLECTING_INFO
+                return ("AI Loan Assistant initialized. I will collect your information and process your loan qualification.\n\n"
+                       "**Information collection process** (sequential):\n"
+                       "• **Step 1-2:** Personal data (Age, Gender)\n"
+                       "• **Step 3-5:** Employment data (Work Class, Occupation, Hours)\n"
+                       "• **Step 6:** Education level\n"
+                       "• **Step 7-8:** Financial data (Capital Gains/Losses)\n"
+                       "• **Step 9-10:** Demographics & Relationship\n\n"
+                       "Progress tracking available in sidebar.\n\n"
+                       "**Step 1:**\n\n" + self._get_next_question())
+            else:
+                return ("AI Loan Assistant system ready. I will collect your data and evaluate your loan qualification.\n\n"
+                       "**Data collection process** (sequential):\n"
+                       "• **Step 1-2:** Personal data (Age, Gender)\n"
+                       "• **Step 3-5:** Employment data (Work Class, Occupation, Hours)\n"
+                       "• **Step 6:** Education level\n"
+                       "• **Step 7-8:** Financial data (Capital Gains/Losses)\n"
+                       "• **Step 9-10:** Demographics & Relationship\n\n"
+                       "Progress tracking available in sidebar.\n\n"
+                       "Enter 'yes' or 'start' to begin data collection.")
 
     def _handle_info_collection(self, user_input: str) -> str:
         """Handle information collection phase"""
         if user_input.lower() in ['quit', 'exit', 'stop', 'cancel']:
-            return "Application cancelled. Feel free to start again anytime by saying 'hi'!"
+            if config.show_anthropomorphic:
+                return "Application cancelled. Feel free to start again anytime by saying 'hi'! 😊"
+            else:
+                return "Application process terminated. Restart available via 'hi' command."
         
         if user_input.lower() in ['review', 'check', 'status']:
             return self._show_progress()
         
         if user_input.lower() in ['help', 'help me', 'what do i do', 'stuck', 'confused']:
             if self.current_field:
-                return f"No problem! Let me help you with {self.current_field.replace('_', ' ')}:\n\n{self._get_field_help(self.current_field)}\n\n✨ You can also use the quick-select buttons if available!"
+                if config.show_anthropomorphic:
+                    return f"No problem! Let me help you with {self.current_field.replace('_', ' ')}:\n\n{self._get_field_help(self.current_field)}\n\n✨ You can also use the quick-select buttons if available!"
+                else:
+                    return f"Help for {self.current_field.replace('_', ' ')}:\n\n{self._get_field_help(self.current_field)}\n\nQuick-select buttons available when applicable."
             else:
-                return "I'm here to help! I'm collecting information for your loan application step by step. You can say 'review' to see your progress, or just answer the current question."
+                if config.show_anthropomorphic:
+                    return "I'm here to help! I'm collecting information for your loan application step by step. You can say 'review' to see your progress, or just answer the current question. 😊"
+                else:
+                    return "Data collection in progress. Enter 'review' for status or respond to current query."
         
         # Process the current field
         if self.current_field:
@@ -276,9 +310,14 @@ class LoanAssistant:
                 # Check if we have all required information
                 if self.application.is_complete:
                     self.conversation_state = ConversationState.REVIEWING
-                    return (f"🎉 Fantastic! I've collected all the necessary information ({completion:.0f}% complete).\n\n"
-                           + self._show_application_summary() + 
-                           "\n\n💼 Would you like me to process your loan application now? (yes/no)")
+                    if config.show_anthropomorphic:
+                        return (f"🎉 Fantastic! I've collected all the necessary information ({completion:.0f}% complete).\n\n"
+                               + self._show_application_summary() + 
+                               "\n\n💼 Would you like me to process your loan application now? (yes/no)")
+                    else:
+                        return (f"Data collection complete ({completion:.0f}%).\n\n"
+                               + self._show_application_summary() + 
+                               "\n\nProcess application? (yes/no)")
                 else:
                     next_question = self._get_next_question()
                     if next_question:
@@ -1033,14 +1072,26 @@ class LoanAssistant:
     
     def _get_progress_celebration(self, completion: float) -> str:
         """Return appropriate celebration message based on progress"""
-        if completion >= 75:
-            return "We're almost done! 🎊"
-        elif completion >= 50:
-            return "Great progress! We're halfway there! 🚀"
-        elif completion >= 25:
-            return "Excellent! You're making great progress! 💪"
+        if config.show_anthropomorphic:
+            # High anthropomorphism: Warm, encouraging
+            if completion >= 75:
+                return "We're almost done! 🎊"
+            elif completion >= 50:
+                return "Great progress! We're halfway there! 🚀"
+            elif completion >= 25:
+                return "Excellent! You're making great progress! 💪"
+            else:
+                return "Thank you so much! 😊"
         else:
-            return "Thank you so much!"
+            # Low anthropomorphism: Technical, factual
+            if completion >= 75:
+                return "Data collection 75% complete."
+            elif completion >= 50:
+                return "50% progress milestone reached."
+            elif completion >= 25:
+                return "25% data fields collected."
+            else:
+                return "Data received."
     
     def _get_smart_validation_message(self, field: str, user_input: str, attempt: int) -> str:
         """Provide smart, context-aware validation messages"""
