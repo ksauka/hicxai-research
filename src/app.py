@@ -4,7 +4,7 @@ import streamlit as st
 import env_loader
 
 # Configure page FIRST - before any other Streamlit commands
-st.set_page_config(page_title="AI Loan Assistant - Complete Solution", layout="wide")
+st.set_page_config(page_title="AI Loan Assistant - Credit Pre-Assessment", layout="wide")
 
 # ===== QUALTRICS/PROLIFIC INTEGRATION (robust final) =====
 import time
@@ -394,7 +394,7 @@ if 'loan_assistant' not in st.session_state:
     st.session_state.chat_history = []
 
 # App header
-st.title("🏦 AI Loan Assistant - Complete Solution")
+st.title("🏦 AI Loan Assistant - Credit Pre-Assessment")
 
 # Assistant Introduction (A/B testing)
 assistant_avatar = config.get_assistant_avatar()
