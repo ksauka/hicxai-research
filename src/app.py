@@ -349,42 +349,49 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# JavaScript to prevent browser reload (injected separately to ensure it runs on every render)
-st.markdown("""
+# JavaScript to prevent browser reload - using components.html for proper execution
+import streamlit.components.v1 as components
+
+components.html("""
 <script>
     (function() {
+        // Access parent window
+        const parentWindow = window.parent;
+        
         // Only set up once per page load
-        if (window.reloadPreventerInstalled) return;
-        window.reloadPreventerInstalled = true;
+        if (parentWindow.reloadPreventerInstalled) return;
+        parentWindow.reloadPreventerInstalled = true;
         
         // Disable browser reload/refresh (F5, Ctrl+R, Cmd+R)
-        document.addEventListener('keydown', function(event) {
+        parentWindow.document.addEventListener('keydown', function(event) {
             // F5 key
             if (event.keyCode === 116) {
                 event.preventDefault();
+                event.stopPropagation();
                 return false;
             }
             // Ctrl+R or Cmd+R
             if ((event.ctrlKey || event.metaKey) && event.keyCode === 82) {
                 event.preventDefault();
+                event.stopPropagation();
                 return false;
             }
         }, true); // Use capture phase
         
         // Warn before page unload (browser close, back button, etc.)
-        window.addEventListener('beforeunload', function (e) {
+        parentWindow.addEventListener('beforeunload', function (e) {
             // Check if user has started application
-            if (window.sessionStorage.getItem('application_started') === 'true') {
+            if (parentWindow.sessionStorage.getItem('application_started') === 'true') {
                 e.preventDefault();
                 e.returnValue = 'Are you sure you want to leave? Your progress will be lost.';
                 return e.returnValue;
             }
         });
         
-        console.log('Browser reload prevention activated');
+        console.log('Browser reload prevention activated on parent window');
     })();
 </script>
-""", unsafe_allow_html=True)
+""", height=0)
 
 def initialize_system():
     """Initialize the agent and all components"""
