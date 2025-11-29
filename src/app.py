@@ -125,11 +125,13 @@ if time.time() >= st.session_state.deadline_ts:
 # expose the function for UI buttons
 st.session_state.back_to_survey = back_to_survey
 
-# Prevent restart via browser refresh/back - redirect to survey if user has started
+# Prevent restart via browser refresh/back ONLY if user had already started
+# Check if this is a fresh session (first visit) vs a refresh (had chat history)
 if "loan_assistant" not in st.session_state and st.session_state.get("return_raw"):
-    # User refreshed or went back - they've lost their session
-    # Redirect them back to survey rather than starting over
-    back_to_survey(done_flag=True)
+    # Only redirect if they had already started (had chat history marker)
+    if st.session_state.get("application_started", False):
+        # User refreshed or went back after starting - redirect to survey
+        back_to_survey(done_flag=True)
 
 # ===== END QUALTRICS/PROLIFIC INTEGRATION =====
 
@@ -638,6 +640,9 @@ if current_field and current_field in field_options:
 
 # Process user input
 if send_button and user_message:
+    # Mark that user has started the application
+    st.session_state.application_started = True
+    
     # Log interaction
     if logger:
         current_field = getattr(st.session_state.loan_assistant, 'current_field', None)
@@ -664,6 +669,9 @@ if send_button and user_message:
 # Handle option clicks
 if 'option_clicked' in st.session_state and st.session_state.option_clicked:
     option_value = st.session_state.option_clicked
+    
+    # Mark that user has started the application
+    st.session_state.application_started = True
     
     # Log interaction
     if logger:
