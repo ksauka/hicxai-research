@@ -347,6 +347,32 @@ st.markdown("""
         border: 1px solid #e9ecef;
     }
 </style>
+
+<script>
+    // Disable browser reload/refresh (F5, Ctrl+R, Cmd+R)
+    document.addEventListener('keydown', function(event) {
+        // F5 key
+        if (event.keyCode === 116) {
+            event.preventDefault();
+            return false;
+        }
+        // Ctrl+R or Cmd+R
+        if ((event.ctrlKey || event.metaKey) && event.keyCode === 82) {
+            event.preventDefault();
+            return false;
+        }
+    });
+    
+    // Warn before page unload (browser close, back button, etc.)
+    window.addEventListener('beforeunload', function (e) {
+        // Check if user has started application
+        if (window.sessionStorage.getItem('application_started') === 'true') {
+            e.preventDefault();
+            e.returnValue = 'Are you sure you want to leave? Your progress will be lost.';
+            return e.returnValue;
+        }
+    });
+</script>
 """, unsafe_allow_html=True)
 
 def initialize_system():
@@ -642,6 +668,8 @@ if current_field and current_field in field_options:
 if send_button and user_message:
     # Mark that user has started the application
     st.session_state.application_started = True
+    # Also set in browser sessionStorage for JavaScript access
+    st.markdown('<script>window.sessionStorage.setItem("application_started", "true");</script>', unsafe_allow_html=True)
     
     # Log interaction
     if logger:
@@ -672,6 +700,8 @@ if 'option_clicked' in st.session_state and st.session_state.option_clicked:
     
     # Mark that user has started the application
     st.session_state.application_started = True
+    # Also set in browser sessionStorage for JavaScript access
+    st.markdown('<script>window.sessionStorage.setItem("application_started", "true");</script>', unsafe_allow_html=True)
     
     # Log interaction
     if logger:
