@@ -347,31 +347,42 @@ st.markdown("""
         border: 1px solid #e9ecef;
     }
 </style>
+""", unsafe_allow_html=True)
 
+# JavaScript to prevent browser reload (injected separately to ensure it runs on every render)
+st.markdown("""
 <script>
-    // Disable browser reload/refresh (F5, Ctrl+R, Cmd+R)
-    document.addEventListener('keydown', function(event) {
-        // F5 key
-        if (event.keyCode === 116) {
-            event.preventDefault();
-            return false;
-        }
-        // Ctrl+R or Cmd+R
-        if ((event.ctrlKey || event.metaKey) && event.keyCode === 82) {
-            event.preventDefault();
-            return false;
-        }
-    });
-    
-    // Warn before page unload (browser close, back button, etc.)
-    window.addEventListener('beforeunload', function (e) {
-        // Check if user has started application
-        if (window.sessionStorage.getItem('application_started') === 'true') {
-            e.preventDefault();
-            e.returnValue = 'Are you sure you want to leave? Your progress will be lost.';
-            return e.returnValue;
-        }
-    });
+    (function() {
+        // Only set up once per page load
+        if (window.reloadPreventerInstalled) return;
+        window.reloadPreventerInstalled = true;
+        
+        // Disable browser reload/refresh (F5, Ctrl+R, Cmd+R)
+        document.addEventListener('keydown', function(event) {
+            // F5 key
+            if (event.keyCode === 116) {
+                event.preventDefault();
+                return false;
+            }
+            // Ctrl+R or Cmd+R
+            if ((event.ctrlKey || event.metaKey) && event.keyCode === 82) {
+                event.preventDefault();
+                return false;
+            }
+        }, true); // Use capture phase
+        
+        // Warn before page unload (browser close, back button, etc.)
+        window.addEventListener('beforeunload', function (e) {
+            // Check if user has started application
+            if (window.sessionStorage.getItem('application_started') === 'true') {
+                e.preventDefault();
+                e.returnValue = 'Are you sure you want to leave? Your progress will be lost.';
+                return e.returnValue;
+            }
+        });
+        
+        console.log('Browser reload prevention activated');
+    })();
 </script>
 """, unsafe_allow_html=True)
 
