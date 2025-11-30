@@ -131,55 +131,41 @@ def explain_with_shap(agent, question_id=None):
         
         # Generate explanation with language differentiation
         if config.show_anthropomorphic:
-            # High anthropomorphism: Warm, conversational
-            explanation = "Let me explain how the model analyzed your application:\n\n"
+            # High anthropomorphism (Condition 6): Warm, conversational with visualizations
+            explanation = "💡 **What factors influenced your decision?**\n\n"
+            explanation += "Based on your profile, here are the key factors the model considered:\n\n"
             
             if positive_factors:
-                explanation += "✅ **These factors worked in your favor:**\n"
-                for factor in positive_factors[:5]:
-                    explanation += f"• {factor}\n"
-                explanation += "\n"
-            
-            if negative_factors:
-                explanation += "⚠️ **These factors may have limited approval:**\n"
-                for factor in negative_factors[:5]:
-                    explanation += f"• {factor}\n"
-                explanation += "\n"
-            
-            explanation += "The model weighs each of these factors based on patterns it learned from thousands of past applications. "
-            explanation += "Your specific combination of features led to the decision you received.\n\n"
-            
-            if config.show_shap_visualizations:
-                explanation += "📊 **Check out the visualizations below** to see exactly how much each factor contributed to your result!"
-        else:
-            # Low anthropomorphism: Technical, concise
-            explanation = "**Feature Importance Analysis**\n\n"
-            explanation += f"Decision: **{predicted_class}**\n\n"
-            
-            if positive_factors:
-                explanation += "**Positive Impact Factors:**\n"
+                explanation += "✅ **Factors that helped you:**\n\n"
                 for i, factor in enumerate(positive_factors[:5], 1):
-                    # Extract importance value from feature_impacts
-                    matching_impact = next((imp for imp in feature_impacts if factor.split('(')[0].strip() in imp), None)
-                    if matching_impact and 'by' in matching_impact:
-                        importance = matching_impact.split('by')[-1].strip()
-                        explanation += f"{i}. {factor} [+{importance}]\n"
-                    else:
-                        explanation += f"{i}. {factor}\n"
+                    explanation += f"{i}. {factor}\n"
                 explanation += "\n"
             
             if negative_factors:
-                explanation += "**Negative Impact Factors:**\n"
+                explanation += "⚠️ **Factors that worked against you:**\n\n"
                 for i, factor in enumerate(negative_factors[:5], 1):
-                    matching_impact = next((imp for imp in feature_impacts if factor.split('(')[0].strip() in imp), None)
-                    if matching_impact and 'by' in matching_impact:
-                        importance = matching_impact.split('by')[-1].strip()
-                        explanation += f"{i}. {factor} [-{importance}]\n"
-                    else:
-                        explanation += f"{i}. {factor}\n"
+                    explanation += f"{i}. {factor}\n"
                 explanation += "\n"
             
-            explanation += "Analysis based on trained model feature importance values."
+            explanation += "These insights are based on patterns we've seen in similar applications.\n\n"
+            explanation += "📊 **Want to explore more?** Check out the visualizations below to see exactly how each factor contributed!"
+        else:
+            # Low anthropomorphism (Condition 5): Technical, concise, no visualizations
+            explanation = "Feature importance analysis for loan decision:\n\n"
+            
+            if positive_factors:
+                explanation += "**Positive impact features:**\n\n"
+                for i, factor in enumerate(positive_factors[:5], 1):
+                    explanation += f"{i}. {factor}\n"
+                explanation += "\n"
+            
+            if negative_factors:
+                explanation += "**Negative impact features:**\n\n"
+                for i, factor in enumerate(negative_factors[:5], 1):
+                    explanation += f"{i}. {factor}\n"
+                explanation += "\n"
+            
+            explanation += "Analysis based on model feature importance values."
         
         result = {
             'type': 'shap',
