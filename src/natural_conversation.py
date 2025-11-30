@@ -509,13 +509,4 @@ class ConversationEnhancer:
 # Global instance for easy importing
 conversation_enhancer = ConversationEnhancer()
 
-def enhance_response(response: str, context: Dict[str, Any] = None, response_type: str = "loan") -> str:
-    """Convenience function to enhance any response"""
-    if response_type == "loan":
-        return conversation_enhancer.enhance_loan_assistant_response(response, context or {})
-    elif response_type == "explanation":
-        explanation_type = context.get('explanation_type', 'general') if context else 'general'
-        user_question = context.get('user_question', '') if context else ''
-        return conversation_enhancer.enhance_xai_explanation(response, explanation_type, user_question)
-    else:
-        return response
+# Legacy enhance_response removed - using the main one at line 213 with high_anthropomorphism support
