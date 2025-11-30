@@ -231,12 +231,11 @@ def explain_with_shap(agent, question_id=None):
             base_explanation += "Analysis based on model feature importance values."
         
         # Enhance with LLM for natural language while preserving factual content
-        llm_used = False
+        llm_debug = ""
         try:
-            import streamlit as st
             from natural_conversation import enhance_response
             
-            st.write("🔍 **[DEBUG] Attempting LLM enhancement...**")
+            llm_debug = "🔍 Attempting LLM enhancement...\n"
             
             context = {
                 'decision': predicted_class,
@@ -255,19 +254,20 @@ def explain_with_shap(agent, question_id=None):
             
             # If LLM fails or returns empty, use base explanation
             if not explanation or len(explanation.strip()) < 20:
-                st.warning(f"⚠️ **[DEBUG] LLM returned short/empty response (len={len(explanation) if explanation else 0}). Using base explanation.**")
+                llm_debug += f"⚠️ LLM returned short/empty response (len={len(explanation) if explanation else 0}). Using base explanation.\n"
                 explanation = base_explanation
             else:
-                st.success(f"✅ **[DEBUG] LLM enhanced successfully! (Anthropomorphism: {'HIGH' if config.show_anthropomorphic else 'LOW'})**")
-                llm_used = True
+                llm_debug += f"✅ LLM enhanced successfully! (Anthropomorphism: {'HIGH' if config.show_anthropomorphic else 'LOW'})\n"
                 
         except Exception as e:
             # Fallback to base explanation if LLM fails
-            import streamlit as st
-            st.error(f"❌ **[DEBUG] LLM enhancement failed: {str(e)}**")
             import traceback
-            st.code(traceback.format_exc())
+            llm_debug += f"❌ LLM enhancement failed: {str(e)}\n"
+            llm_debug += f"Traceback:\n{traceback.format_exc()}\n"
             explanation = base_explanation
+        
+        # Add debug info to explanation for testing
+        explanation = f"**[DEBUG INFO]**\n{llm_debug}\n---\n\n{explanation}"
         
         result = {
             'type': 'shap',
@@ -513,11 +513,11 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 base_explanation += "\nData-driven insights from comparative application analysis."
         
         # Enhance with LLM for natural language while preserving factual content
+        llm_debug = ""
         try:
-            import streamlit as st
             from natural_conversation import enhance_response
             
-            st.write("🔍 **[DEBUG] Attempting LLM enhancement for counterfactual...**")
+            llm_debug = "🔍 Attempting LLM enhancement for counterfactual...\n"
             
             context = {
                 'decision': current_pred,
@@ -535,18 +535,20 @@ def explain_with_dice(agent, target_class=None, features='all'):
             
             # If LLM fails or returns empty, use base explanation
             if not explanation or len(explanation.strip()) < 20:
-                st.warning(f"⚠️ **[DEBUG] LLM returned short/empty response. Using base explanation.**")
+                llm_debug += f"⚠️ LLM returned short/empty response. Using base explanation.\n"
                 explanation = base_explanation
             else:
-                st.success(f"✅ **[DEBUG] LLM enhanced counterfactual successfully! (Anthropomorphism: {'HIGH' if config.show_anthropomorphic else 'LOW'})**")
+                llm_debug += f"✅ LLM enhanced counterfactual successfully! (Anthropomorphism: {'HIGH' if config.show_anthropomorphic else 'LOW'})\n"
                 
         except Exception as e:
             # Fallback to base explanation if LLM fails
-            import streamlit as st
-            st.error(f"❌ **[DEBUG] LLM enhancement failed: {str(e)}**")
             import traceback
-            st.code(traceback.format_exc())
+            llm_debug += f"❌ LLM enhancement failed: {str(e)}\n"
+            llm_debug += f"Traceback:\n{traceback.format_exc()}\n"
             explanation = base_explanation
+        
+        # Add debug info to explanation for testing
+        explanation = f"**[DEBUG INFO]**\n{llm_debug}\n---\n\n{explanation}"
         
         # Ensure current_instance is a dict for return values
         instance_dict = current_instance
