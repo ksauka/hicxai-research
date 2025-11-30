@@ -104,82 +104,60 @@ def explain_with_shap(agent, question_id=None):
                 sorted_features.insert(0, capital_item)
         
         for feature, impact in sorted_features[:15]:  # Check more features to get valid ones
-            # Skip technical features that aren't user-relevant
-            if feature in ['fnlwgt', 'education_num']:  # fnlwgt is census weight, education_num is redundant
-                continue
-                
-            # Get actual value - check both direct access and one-hot encoded versions
-            actual_value = instance_dict.get(feature, None) if instance_dict else None
+            # Check if this is a one-hot encoded feature (e.g., workclass_Private)
+            categorical_prefixes = ['workclass_', 'education_', 'marital_status_', 'occupation_', 
+                                   'relationship_', 'race_', 'sex_', 'native_country_']
             
-            # For categorical features, try to get the value from one-hot encoded columns
-            if actual_value is None:
-                categorical_features = ['workclass', 'education', 'marital_status', 'occupation', 
-                                       'relationship', 'race', 'sex', 'native_country']
-                if feature in categorical_features:
-                    actual_value = get_categorical_value(feature)
+            is_onehot = any(feature.startswith(prefix) for prefix in categorical_prefixes)
             
-            # Create natural language description - skip only if value is truly missing
-            if feature == 'age' and actual_value is not None:
-                factor_desc = f"Your age (being {actual_value} years old)"
-            elif feature == 'education':
-                edu = actual_value or get_categorical_value('education')
-                if edu:
-                    factor_desc = f"Your education level ({edu})"
-                else:
-                    continue
-            elif feature == 'hours_per_week' and actual_value is not None:
-                factor_desc = f"Your work schedule (working {actual_value} hours per week)"
-            elif feature == 'capital_gain' and actual_value is not None:
-                factor_desc = f"Your capital gains (${actual_value})"
-            elif feature == 'capital_loss' and actual_value is not None:
-                factor_desc = f"Your capital losses (${actual_value})"
-            elif feature == 'marital_status':
-                val = actual_value or get_categorical_value('marital_status')
-                if val:
-                    factor_desc = f"Your marital status ({val})"
-                else:
-                    continue
-            elif feature == 'occupation':
-                val = actual_value or get_categorical_value('occupation')
-                if val:
-                    factor_desc = f"Your occupation ({val})"
-                else:
-                    continue
-            elif feature == 'relationship':
-                val = actual_value or get_categorical_value('relationship')
-                if val:
-                    factor_desc = f"Your relationship status ({val})"
-                else:
-                    continue
-            elif feature == 'workclass':
-                val = actual_value or get_categorical_value('workclass')
-                if val:
-                    factor_desc = f"Your work class ({val})"
-                else:
-                    continue
-            elif feature == 'native_country':
-                val = actual_value or get_categorical_value('native_country')
-                if val:
-                    factor_desc = f"Your country ({val})"
-                else:
-                    continue
-            elif feature == 'race':
-                val = actual_value or get_categorical_value('race')
-                if val:
-                    factor_desc = f"Your race ({val})"
-                else:
-                    continue
-            elif feature == 'sex':
-                val = actual_value or get_categorical_value('sex')
-                if val:
-                    factor_desc = f"Your gender ({val})"
-                else:
-                    continue
+            if is_onehot:
+                # Extract base feature and value (e.g., 'workclass_Private' -> base='workclass', value='Private')
+                for prefix in categorical_prefixes:
+                    if feature.startswith(prefix):
+                        feature_base = prefix.rstrip('_')
+                        actual_value = feature.replace(prefix, '')
+                        break
             else:
-                # Generic fallback - only skip if value is None or empty
-                if actual_value is None or str(actual_value).strip() == '':
-                    continue
-                factor_desc = f"Your {feature.replace('_', ' ')} ({actual_value})"
+                # Regular numeric feature
+                actual_value = instance_dict.get(feature, None) if instance_dict else None
+                feature_base = feature
+            
+            # Skip technical features that aren't user-relevant (check after extracting feature_base)
+            if feature_base in ['fnlwgt', 'education_num']:  # fnlwgt is census weight, education_num is redundant
+                continue
+            
+            # Skip if value is missing
+            if actual_value is None or str(actual_value).strip() == '':
+                continue
+            
+            # Create natural language description using feature_base
+            if feature_base == 'age':
+                factor_desc = f"Your age (being {actual_value} years old)"
+            elif feature_base == 'education':
+                factor_desc = f"Your education level ({actual_value})"
+            elif feature_base == 'hours_per_week':
+                factor_desc = f"Your work schedule (working {actual_value} hours per week)"
+            elif feature_base == 'capital_gain':
+                factor_desc = f"Your capital gains (${actual_value})"
+            elif feature_base == 'capital_loss':
+                factor_desc = f"Your capital losses (${actual_value})"
+            elif feature_base == 'marital_status':
+                factor_desc = f"Your marital status ({actual_value})"
+            elif feature_base == 'occupation':
+                factor_desc = f"Your occupation ({actual_value})"
+            elif feature_base == 'relationship':
+                factor_desc = f"Your relationship status ({actual_value})"
+            elif feature_base == 'workclass':
+                factor_desc = f"Your work class ({actual_value})"
+            elif feature_base == 'native_country':
+                factor_desc = f"Your country ({actual_value})"
+            elif feature_base == 'race':
+                factor_desc = f"Your race ({actual_value})"
+            elif feature_base == 'sex':
+                factor_desc = f"Your gender ({actual_value})"
+            else:
+                # Generic fallback
+                factor_desc = f"Your {feature_base.replace('_', ' ')} ({actual_value})"
             
             if impact > 0:
                 positive_factors.append(factor_desc)
@@ -231,11 +209,8 @@ def explain_with_shap(agent, question_id=None):
             base_explanation += "Analysis based on model feature importance values."
         
         # Enhance with LLM for natural language while preserving factual content
-        llm_debug = ""
         try:
             from natural_conversation import enhance_response
-            
-            llm_debug = "🔍 Attempting LLM enhancement...\n"
             
             context = {
                 'decision': predicted_class,
@@ -254,20 +229,11 @@ def explain_with_shap(agent, question_id=None):
             
             # If LLM fails or returns empty, use base explanation
             if not explanation or len(explanation.strip()) < 20:
-                llm_debug += f"⚠️ LLM returned short/empty response (len={len(explanation) if explanation else 0}). Using base explanation.\n"
                 explanation = base_explanation
-            else:
-                llm_debug += f"✅ LLM enhanced successfully! (Anthropomorphism: {'HIGH' if config.show_anthropomorphic else 'LOW'})\n"
                 
         except Exception as e:
             # Fallback to base explanation if LLM fails
-            import traceback
-            llm_debug += f"❌ LLM enhancement failed: {str(e)}\n"
-            llm_debug += f"Traceback:\n{traceback.format_exc()}\n"
             explanation = base_explanation
-        
-        # Add debug info to explanation for testing
-        explanation = f"**[DEBUG INFO]**\n{llm_debug}\n---\n\n{explanation}"
         
         result = {
             'type': 'shap',
@@ -513,11 +479,8 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 base_explanation += "\nData-driven insights from comparative application analysis."
         
         # Enhance with LLM for natural language while preserving factual content
-        llm_debug = ""
         try:
             from natural_conversation import enhance_response
-            
-            llm_debug = "🔍 Attempting LLM enhancement for counterfactual...\n"
             
             context = {
                 'decision': current_pred,
@@ -535,20 +498,11 @@ def explain_with_dice(agent, target_class=None, features='all'):
             
             # If LLM fails or returns empty, use base explanation
             if not explanation or len(explanation.strip()) < 20:
-                llm_debug += f"⚠️ LLM returned short/empty response. Using base explanation.\n"
                 explanation = base_explanation
-            else:
-                llm_debug += f"✅ LLM enhanced counterfactual successfully! (Anthropomorphism: {'HIGH' if config.show_anthropomorphic else 'LOW'})\n"
                 
         except Exception as e:
             # Fallback to base explanation if LLM fails
-            import traceback
-            llm_debug += f"❌ LLM enhancement failed: {str(e)}\n"
-            llm_debug += f"Traceback:\n{traceback.format_exc()}\n"
             explanation = base_explanation
-        
-        # Add debug info to explanation for testing
-        explanation = f"**[DEBUG INFO]**\n{llm_debug}\n---\n\n{explanation}"
         
         # Ensure current_instance is a dict for return values
         instance_dict = current_instance

@@ -597,23 +597,8 @@ class LoanAssistant:
                 pass
             
             # Humanize explanation for high anthropomorphism if not already done by LLM
-            if config.show_anthropomorphic:
-                # Make technical explanations more conversational and warm
-                formatted_explanation = formatted_explanation.replace('SHAP Analysis:', 'Let me walk you through what I found in your application,')
-                formatted_explanation = formatted_explanation.replace('the model predicted', 'I can see that your income level is likely to be')
-                formatted_explanation = formatted_explanation.replace('increases the prediction probability', 'really helps your case')
-                formatted_explanation = formatted_explanation.replace('decreases the prediction probability', 'makes things a bit more challenging')
-                formatted_explanation = formatted_explanation.replace('The most important factors are:', 'the key things I looked at in your situation are:')
-                formatted_explanation = formatted_explanation.replace('For the current instance,', 'Looking at your specific situation,')
-                formatted_explanation = formatted_explanation.replace('Based on what you\'ve told me,', 'Thank you for sharing that information with me!')
-            
-            # Format response based on anthropomorphism level
-            if config.show_anthropomorphic:
-                # High anthropomorphism: Warm, friendly, human-like
-                return f"💡 **I'm happy to help explain this to you!**\n\n{formatted_explanation}\n\n😊"
-            else:
-                # Low anthropomorphism: Technical, concise
-                return f"**Explanation:**\n\n{formatted_explanation}"
+            # LLM already handles anthropomorphism differentiation, just return the explanation
+            return f"**Explanation:**\n\n{formatted_explanation}"
             
         except Exception as e:
             return ("I'm sorry, I couldn't generate that explanation right now. "
