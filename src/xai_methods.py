@@ -32,14 +32,14 @@ def explain_with_shap(agent, question_id=None):
         
         # Get actual SHAP values for the current instance
         feature_importance = {}
+        shap_values_computed = None
         
         try:
-            # Create SHAP explainer
-            explainer = shap.TreeExplainer(agent.clf_display)
-            
-            # Convert current instance to DataFrame
+            # Convert current instance to DataFrame first
             if isinstance(current_instance, dict):
                 instance_df = pd.DataFrame([current_instance])
+            elif hasattr(current_instance, 'to_dict'):
+                instance_df = pd.DataFrame([current_instance.to_dict()])
             else:
                 instance_df = pd.DataFrame([current_instance]) if not isinstance(current_instance, pd.DataFrame) else current_instance
             
@@ -50,15 +50,21 @@ def explain_with_shap(agent, question_id=None):
                     instance_df[col] = 0
             instance_df = instance_df[feature_names]
             
+            # Try to compute SHAP values
+            # Create SHAP explainer
+            explainer = shap.TreeExplainer(agent.clf_display)
+            
             # Get SHAP values
             shap_values = explainer.shap_values(instance_df)
             
             # For binary classification, shap_values might be a list [class0, class1]
             if isinstance(shap_values, list):
-                shap_values = shap_values[1] if len(shap_values) > 1 else shap_values[0]
+                shap_values_computed = shap_values[1] if len(shap_values) > 1 else shap_values[0]
+            else:
+                shap_values_computed = shap_values
             
             # Get SHAP values for this instance
-            instance_shap = shap_values[0] if len(shap_values.shape) > 1 else shap_values
+            instance_shap = shap_values_computed[0] if len(shap_values_computed.shape) > 1 else shap_values_computed
             
             # Create feature importance dictionary from SHAP values
             for idx, feature in enumerate(feature_names):
@@ -68,13 +74,21 @@ def explain_with_shap(agent, question_id=None):
                     
         except Exception as shap_error:
             # Fallback to model feature importances if SHAP fails
+            print(f"Using fallback feature importances: {shap_error}")
             if hasattr(agent.clf_display, 'feature_importances_'):
                 feature_names = agent.data['X_display'].columns.tolist()
                 importances = agent.clf_display.feature_importances_
-                top_indices = np.argsort(importances)[-10:][::-1]
-                for idx in top_indices:
-                    if importances[idx] > 0.01:
-                        feature_importance[feature_names[idx]] = float(importances[idx])
+                
+                # Get all features with their importance
+                for idx, feature in enumerate(feature_names):
+                    if importances[idx] > 0.001:  # Only significant features
+                        feature_importance[feature] = float(importances[idx])
+            else:
+                return {
+                    'type': 'error',
+                    'explanation': "Feature importance analysis is not available for this model type.",
+                    'error': 'Model does not support feature importance'
+                }
         
         # Build natural language explanation with actual user values
         feature_impacts = []
@@ -82,9 +96,26 @@ def explain_with_shap(agent, question_id=None):
         negative_factors = []
         
         # Convert Series to dict if needed for easier access
-        instance_dict = current_instance
-        if hasattr(current_instance, 'to_dict'):
-            instance_dict = current_instance.to_dict()
+        instance_dict = None
+        if current_instance is not None:
+            if hasattr(current_instance, 'to_dict'):
+                instance_dict = current_instance.to_dict()
+            elif isinstance(current_instance, dict):
+                instance_dict = current_instance
+            else:
+                # Fallback: try to convert to dict
+                try:
+                    instance_dict = dict(current_instance)
+                except:
+                    instance_dict = {}
+        
+        # Check if we have any feature importance data
+        if not feature_importance:
+            return {
+                'type': 'error',
+                'explanation': "Unable to compute feature importance. The model may not have sufficient data.",
+                'error': 'No feature importance values computed'
+            }
         
         # Sort by importance  
         sorted_features = sorted(feature_importance.items(), key=lambda x: abs(x[1]), reverse=True)
@@ -158,7 +189,7 @@ def explain_with_shap(agent, question_id=None):
                 explanation += f"**Negative impact features**: {', '.join(negative_factors)}\n\n"
             explanation += "Features weighted by model importance. Top contributing factors displayed above."
         
-        return {
+        result = {
             'type': 'shap',
             'explanation': explanation,
             'feature_impacts': feature_impacts,
@@ -166,6 +197,13 @@ def explain_with_shap(agent, question_id=None):
             'method': 'feature_importance_analysis',
             'raw_importances': feature_importance
         }
+        
+        # Include SHAP values if they were successfully computed (needed for visualizations)
+        if shap_values_computed is not None:
+            result['shap_values'] = shap_values_computed
+            result['instance_df'] = instance_df
+        
+        return result
         
     except Exception as e:
         return {
