@@ -81,18 +81,23 @@ def explain_with_shap(agent, question_id=None):
         positive_factors = []
         negative_factors = []
         
+        # Convert Series to dict if needed for easier access
+        instance_dict = current_instance
+        if hasattr(current_instance, 'to_dict'):
+            instance_dict = current_instance.to_dict()
+        
         # Sort by importance
         sorted_features = sorted(feature_importance.items(), key=lambda x: abs(x[1]), reverse=True)
         
         for feature, impact in sorted_features[:8]:  # Top 8 features
             # Get actual value from user's instance
-            actual_value = current_instance.get(feature, 'N/A') if current_instance else 'N/A'
+            actual_value = instance_dict.get(feature, 'N/A') if instance_dict else 'N/A'
             
             # Create natural language description
             if feature == 'age':
                 factor_desc = f"Your age (being {actual_value} years old)"
             elif feature == 'education_num' or feature == 'education':
-                edu = current_instance.get('education', 'your education level') if current_instance else 'your education level'
+                edu = instance_dict.get('education', 'your education level') if instance_dict else 'your education level'
                 factor_desc = f"Your education level ({edu})"
             elif feature == 'hours_per_week':
                 factor_desc = f"Your work schedule (working {actual_value} hours per week)"
@@ -293,9 +298,13 @@ def explain_with_dice(agent, target_class=None, features='all'):
             pass
         
         # If DiCE didn't generate changes or failed, use intelligent rule-based system with natural language
-        if not changes and current_instance:
+        if not changes and current_instance is not None:
+            # Convert Series to dict if needed
+            if hasattr(current_instance, 'to_dict'):
+                current_instance = current_instance.to_dict()
+            
             # Check education level
-            current_education = current_instance.get('education', '').lower()
+            current_education = str(current_instance.get('education', '')).lower()
             current_education_num = current_instance.get('education_num', 0)
             if current_education_num < 13:  # Less than Bachelor's
                 if 'hs-grad' in current_education or 'high school' in current_education:
@@ -306,7 +315,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
                     changes.append("Your education level (pursuing a Bachelor's or higher degree)")
             
             # Check occupation
-            current_occupation = current_instance.get('occupation', '').lower()
+            current_occupation = str(current_instance.get('occupation', '')).lower()
             if 'exec' not in current_occupation and 'prof' not in current_occupation and 'managerial' not in current_occupation:
                 changes.append(f"Your occupation (moving from {current_occupation} to a professional or managerial role)")
             
@@ -318,7 +327,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 changes.append(f"Your work schedule (increasing from {current_hours} to 50+ hours per week)")
             
             # Check marital status
-            current_marital = current_instance.get('marital_status', '').lower()
+            current_marital = str(current_instance.get('marital_status', '')).lower()
             if 'married' not in current_marital:
                 changes.append(f"Your marital status (currently {current_marital})")
             
