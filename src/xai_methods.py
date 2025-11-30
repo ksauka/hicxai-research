@@ -229,19 +229,19 @@ def explain_with_shap(agent, question_id=None):
                         base_explanation += f"• Education: {value} matched positive patterns\n"
                 base_explanation += "\nThese signals matched patterns I've seen in similar applications."
             else:
-                # DENIED: Frame positively correlated features as "helped but not enough"
-                # Only capital_loss truly hurts
-                base_explanation = "I know this isn't the answer you hoped for. Here's what the model considered:\n"
+                # DENIED: Be specific about what limited approval
+                # Only capital_loss truly hurts; others just weren't strong enough
+                base_explanation = "I know this isn't the answer you hoped for. Here's what limited approval:\n"
                 
                 # Check for capital_loss first (only truly negative factor)
                 has_capital_loss = False
                 for feature, value, impact in top_feature_list:
                     if 'capital_loss' in feature and value > 0:
-                        base_explanation += f"• Capital losses: {fmt_money(value)} reduced your score\n"
+                        base_explanation += f"• Capital losses of {fmt_money(value)} worked against you\n"
                         has_capital_loss = True
                         break
                 
-                # Other factors: frame as positive but not sufficient
+                # Other factors: be specific about why they weren't strong enough
                 count = 0
                 for feature, value, impact in top_feature_list:
                     if 'capital_loss' in feature:
@@ -250,22 +250,34 @@ def explain_with_shap(agent, question_id=None):
                         break
                     
                     if 'capital_gain' in feature:
-                        if value == 0 or value < 1000:
-                            base_explanation += f"• Capital gains: {fmt_money(value)} — could be higher\n"
+                        if value == 0:
+                            base_explanation += f"• No capital gains — having investment income above $5,000 typically helps approval\n"
+                        elif value < 5000:
+                            base_explanation += f"• Capital gains of {fmt_money(value)} were below the typical approval threshold ($5,000+)\n"
                         else:
-                            base_explanation += f"• Capital gains: {fmt_money(value)} helped, but other factors weighed more\n"
+                            base_explanation += f"• Capital gains of {fmt_money(value)} were positive but not the deciding factor\n"
                     elif 'hours' in feature:
-                        if value < 40:
-                            base_explanation += f"• Work hours: {value} hrs/week — full-time work scores higher\n"
+                        if value < 35:
+                            base_explanation += f"• Working {value} hrs/week — most approvals work 40+ hours\n"
+                        elif value < 40:
+                            base_explanation += f"• Working {value} hrs/week — just below the 40-hour benchmark\n"
                         else:
-                            base_explanation += f"• Work hours: {value} hrs/week was positive\n"
+                            base_explanation += f"• Working {value} hrs/week was solid\n"
                     elif 'education' in feature:
-                        base_explanation += f"• Education: {value} — the model favors advanced degrees\n"
+                        if value in ['HS-grad', 'Some-college', '11th', '10th', '9th']:
+                            base_explanation += f"• Education level ({value}) — Bachelors or higher significantly increases approval odds\n"
+                        else:
+                            base_explanation += f"• Education level ({value}) was considered\n"
                     elif 'age' in feature:
-                        base_explanation += f"• Age: {value} was a factor\n"
+                        if value < 25:
+                            base_explanation += f"• Age {value} — approval rates increase with age and work history\n"
+                        elif value > 60:
+                            base_explanation += f"• Age {value} — closer to retirement can affect income stability assessment\n"
+                        else:
+                            base_explanation += f"• Age {value} was in a typical range\n"
                     count += 1
                 
-                base_explanation += "\nThese are the main signals the model leaned on for this decision."
+                base_explanation += "\nThe combination of these factors led to the denial."
         else:
             # Low anthropomorphism: Professional, technical, direct
             base_explanation = "Top factors influencing the score:\n\n"
