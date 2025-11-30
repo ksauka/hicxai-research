@@ -253,7 +253,13 @@ def explain_with_dice(agent, target_class=None, features='all'):
                     orig_val = query_instance[col].values[0]
                     cf_val = cf_df[col].iloc[0]
                     
-                    if orig_val != cf_val:
+                    # Handle comparison properly for pandas types
+                    try:
+                        is_different = bool(orig_val != cf_val)
+                    except (ValueError, TypeError):
+                        is_different = str(orig_val) != str(cf_val)
+                    
+                    if is_different:
                         # Format with natural language based on feature type
                         if col == 'age':
                             changes.append(f"Your age (changing from {orig_val} to {cf_val} years old)")
