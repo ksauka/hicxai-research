@@ -76,7 +76,7 @@ def explain_with_shap(agent, question_id=None):
                     if importances[idx] > 0.01:
                         feature_importance[feature_names[idx]] = float(importances[idx])
         
-        # Build natural language explanation
+        # Build natural language explanation with actual user values
         feature_impacts = []
         positive_factors = []
         negative_factors = []
@@ -85,12 +85,43 @@ def explain_with_shap(agent, question_id=None):
         sorted_features = sorted(feature_importance.items(), key=lambda x: abs(x[1]), reverse=True)
         
         for feature, impact in sorted_features[:8]:  # Top 8 features
-            feature_name = feature.replace('_', ' ').replace(' num', '').title()
+            # Get actual value from user's instance
+            actual_value = current_instance.get(feature, 'N/A') if current_instance else 'N/A'
+            
+            # Create natural language description
+            if feature == 'age':
+                factor_desc = f"Your age (being {actual_value} years old)"
+            elif feature == 'education_num' or feature == 'education':
+                edu = current_instance.get('education', 'your education level') if current_instance else 'your education level'
+                factor_desc = f"Your education level ({edu})"
+            elif feature == 'hours_per_week':
+                factor_desc = f"Your work schedule (working {actual_value} hours per week)"
+            elif feature == 'capital_gain':
+                factor_desc = f"Your capital gains (${actual_value})"
+            elif feature == 'capital_loss':
+                factor_desc = f"Your capital losses (${actual_value})"
+            elif feature == 'marital_status':
+                factor_desc = f"Your marital status ({actual_value})"
+            elif feature == 'occupation':
+                factor_desc = f"Your occupation ({actual_value})"
+            elif feature == 'relationship':
+                factor_desc = f"Your relationship status ({actual_value})"
+            elif feature == 'workclass':
+                factor_desc = f"Your work class ({actual_value})"
+            elif feature == 'native_country':
+                factor_desc = f"Your country ({actual_value})"
+            elif feature == 'race':
+                factor_desc = f"Your race ({actual_value})"
+            elif feature == 'sex':
+                factor_desc = f"Your gender ({actual_value})"
+            else:
+                factor_desc = f"Your {feature.replace('_', ' ')} ({actual_value})"
+            
             if impact > 0:
-                positive_factors.append(feature_name)
+                positive_factors.append(factor_desc)
                 feature_impacts.append(f"{feature} increases the prediction probability by {impact:.3f}")
             else:
-                negative_factors.append(feature_name)
+                negative_factors.append(factor_desc)
                 feature_impacts.append(f"{feature} decreases the prediction probability by {abs(impact):.3f}")
         
         # Generate explanation with language differentiation
@@ -213,71 +244,86 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 desired_class=target_value
             )
             
-            # Extract changes from counterfactuals
+            # Extract changes from counterfactuals using natural language
             cf_df = dice_exp.cf_examples_list[0].final_cfs_df
             
             if cf_df is not None and len(cf_df) > 0:
-                # Compare with original instance
+                # Compare with original instance and format naturally
                 for col in query_instance.columns:
                     orig_val = query_instance[col].values[0]
                     cf_val = cf_df[col].iloc[0]
                     
                     if orig_val != cf_val:
-                        if col in continuous_features:
-                            changes.append(f"Change {col.replace('_', ' ')} from {orig_val} to {cf_val}")
+                        # Format with natural language based on feature type
+                        if col == 'age':
+                            changes.append(f"Your age (changing from {orig_val} to {cf_val} years old)")
+                        elif col == 'education_num' or col == 'education':
+                            changes.append(f"Your education level (from {orig_val} to {cf_val})")
+                        elif col == 'hours_per_week':
+                            changes.append(f"Your work schedule (from {orig_val} to {cf_val} hours per week)")
+                        elif col == 'capital_gain':
+                            changes.append(f"Your capital gains (from ${orig_val} to ${cf_val})")
+                        elif col == 'capital_loss':
+                            changes.append(f"Your capital losses (from ${orig_val} to ${cf_val})")
+                        elif col == 'occupation':
+                            changes.append(f"Your occupation (from {orig_val} to {cf_val})")
+                        elif col == 'marital_status':
+                            changes.append(f"Your marital status (from {orig_val} to {cf_val})")
+                        elif col == 'relationship':
+                            changes.append(f"Your relationship status (from {orig_val} to {cf_val})")
                         else:
-                            changes.append(f"Change {col.replace('_', ' ')} from '{orig_val}' to '{cf_val}'")
+                            changes.append(f"Your {col.replace('_', ' ')} (from {orig_val} to {cf_val})")
             
         except Exception as dice_error:
             # Fallback to rule-based analysis if DiCE fails
             pass
         
-        # If DiCE didn't generate changes or failed, use intelligent rule-based system
+        # If DiCE didn't generate changes or failed, use intelligent rule-based system with natural language
         if not changes and current_instance:
             # Check education level
             current_education = current_instance.get('education', '').lower()
             current_education_num = current_instance.get('education_num', 0)
             if current_education_num < 13:  # Less than Bachelor's
                 if 'hs-grad' in current_education or 'high school' in current_education:
-                    changes.append("Increase your education from High School to Bachelor's degree")
+                    changes.append("Your education level (completing a Bachelor's degree)")
                 elif current_education_num < 9:
-                    changes.append("Complete your High School education and pursue higher education")
+                    changes.append("Your education level (completing High School and pursuing higher education)")
                 else:
-                    changes.append("Pursue a Bachelor's or higher degree")
+                    changes.append("Your education level (pursuing a Bachelor's or higher degree)")
             
             # Check occupation
             current_occupation = current_instance.get('occupation', '').lower()
             if 'exec' not in current_occupation and 'prof' not in current_occupation and 'managerial' not in current_occupation:
-                changes.append("Move into a professional, managerial, or executive role")
+                changes.append(f"Your occupation (moving from {current_occupation} to a professional or managerial role)")
             
             # Check working hours
             current_hours = current_instance.get('hours_per_week', 0)
             if current_hours < 40:
-                changes.append(f"Increase your working hours from {current_hours} to 40+ hours per week")
+                changes.append(f"Your work schedule (increasing from {current_hours} to 40+ hours per week)")
             elif current_hours < 50:
-                changes.append(f"Consider increasing your hours from {current_hours} to 50+ hours per week")
+                changes.append(f"Your work schedule (increasing from {current_hours} to 50+ hours per week)")
             
             # Check marital status
             current_marital = current_instance.get('marital_status', '').lower()
             if 'married' not in current_marital:
-                changes.append("Married-civ-spouse status is associated with better outcomes")
+                changes.append(f"Your marital status (currently {current_marital})")
             
             # Check capital gain
             current_capital_gain = current_instance.get('capital_gain', 0)
             if current_capital_gain < 5000:
-                changes.append(f"Increase capital gains from ${current_capital_gain} to $5,000+")
+                changes.append(f"Your capital gains (increasing from ${current_capital_gain} to $5,000 or more)")
             
             # Check age
             current_age = current_instance.get('age', 0)
             if current_age < 35:
-                changes.append(f"Age progression (currently {current_age}) correlates with approval likelihood")
+                changes.append(f"Your age (being {current_age} years old)")
         
         # Fallback if no changes generated
         if not changes:
             changes = [
-                "Increase your education level (e.g., pursue a Bachelor's or Master's degree)",
-                "Move into a professional or managerial occupation", 
-                "Increase your working hours to full-time (40+ hours per week)"
+                "Your education level (pursuing a Bachelor's or Master's degree)",
+                "Your occupation (moving into a professional or managerial role)", 
+                "Your work schedule (working full-time, 40+ hours per week)"
             ]
         
         # Generate natural language explanation with language differentiation
