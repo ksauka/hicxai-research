@@ -562,7 +562,7 @@ def route_to_xai_method(agent, intent_result):
         
         # Check experimental condition - only provide explanations that are enabled
         if method == 'shap':
-            if config.show_shap_visualizations:  # feature_importance condition
+            if config.explanation == "feature_importance":  # Both condition 5 and 6
                 return explain_with_shap(agent, intent_result.get('label'))
             else:
                 return {
