@@ -86,10 +86,19 @@ def explain_with_shap(agent, question_id=None):
         if hasattr(current_instance, 'to_dict'):
             instance_dict = current_instance.to_dict()
         
-        # Sort by importance
+        # Sort by importance  
         sorted_features = sorted(feature_importance.items(), key=lambda x: abs(x[1]), reverse=True)
         
-        for feature, impact in sorted_features[:8]:  # Top 8 features
+        # Prioritize capital_gain if user has significant gains (moves it to top of list)
+        capital_gain_val = instance_dict.get('capital_gain', 0) if instance_dict else 0
+        if capital_gain_val > 5000:  # Significant capital gains
+            # Find capital_gain in sorted features and move to front
+            capital_idx = next((i for i, (f, _) in enumerate(sorted_features) if f == 'capital_gain'), None)
+            if capital_idx is not None and capital_idx > 0:
+                capital_item = sorted_features.pop(capital_idx)
+                sorted_features.insert(0, capital_item)
+        
+        for feature, impact in sorted_features[:10]:  # Top 10 features (increased from 8)
             # Get actual value from user's instance
             actual_value = instance_dict.get(feature, 'N/A') if instance_dict else 'N/A'
             
@@ -316,8 +325,12 @@ def explain_with_dice(agent, target_class=None, features='all'):
             
             # Check occupation
             current_occupation = str(current_instance.get('occupation', '')).lower()
-            if 'exec' not in current_occupation and 'prof' not in current_occupation and 'managerial' not in current_occupation:
+            if current_occupation and 'exec' not in current_occupation and 'prof' not in current_occupation and 'managerial' not in current_occupation:
                 changes.append(f"Your occupation (moving from {current_occupation} to a professional or managerial role)")
+            elif not current_occupation:
+                changes.append("Your occupation (moving to a professional or managerial role)")
+            elif not current_occupation:
+                changes.append("Your occupation (moving to a professional or managerial role)")
             
             # Check working hours
             current_hours = current_instance.get('hours_per_week', 0)
@@ -328,8 +341,10 @@ def explain_with_dice(agent, target_class=None, features='all'):
             
             # Check marital status
             current_marital = str(current_instance.get('marital_status', '')).lower()
-            if 'married' not in current_marital:
+            if current_marital and 'married' not in current_marital:
                 changes.append(f"Your marital status (currently {current_marital})")
+            elif not current_marital:
+                changes.append("Your marital status (married status associated with better outcomes)")
             
             # Check capital gain
             current_capital_gain = current_instance.get('capital_gain', 0)
@@ -369,17 +384,20 @@ def explain_with_dice(agent, target_class=None, features='all'):
         else:
             # Low anthropomorphism: Technical, concise
             if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
-                explanation = "**Counterfactual analysis - Approval factors:**\n\n"
-                explanation += "Profile modifications with positive impact on approval probability:\n\n"
+                explanation = "Profile modifications with positive impact on approval probability:\n\n"
                 for i, change in enumerate(changes[:5], 1):
                     explanation += f"{i}. {change}\n"
                 explanation += "\nAnalysis based on approved application patterns with similar baseline profiles."
             else:
-                explanation = "**Counterfactual analysis - Alternative outcomes:**\n\n"
-                explanation += "Factors that could modify current decision:\n\n"
+                explanation = "Factors that could modify current decision:\n\n"
                 for i, change in enumerate(changes[:5], 1):
                     explanation += f"{i}. {change}\n"
                 explanation += "\nData-driven insights from comparative application analysis."
+        
+        # Ensure current_instance is a dict for return values
+        instance_dict = current_instance
+        if hasattr(current_instance, 'to_dict'):
+            instance_dict = current_instance.to_dict()
         
         return {
             'type': 'dice',
@@ -388,10 +406,10 @@ def explain_with_dice(agent, target_class=None, features='all'):
             'changes': changes,
             'method': 'counterfactual_analysis',
             'current_values': {
-                'education_num': current_instance.get('education_num', 0) if current_instance else 0,
-                'hours_per_week': current_instance.get('hours_per_week', 0) if current_instance else 0,
-                'capital_gain': current_instance.get('capital_gain', 0) if current_instance else 0,
-                'age': current_instance.get('age', 0) if current_instance else 0
+                'education_num': instance_dict.get('education_num', 0) if instance_dict else 0,
+                'hours_per_week': instance_dict.get('hours_per_week', 0) if instance_dict else 0,
+                'capital_gain': instance_dict.get('capital_gain', 0) if instance_dict else 0,
+                'age': instance_dict.get('age', 0) if instance_dict else 0
             }
         }
         
