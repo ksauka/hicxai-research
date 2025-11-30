@@ -831,6 +831,9 @@ class LoanAssistant:
             self.agent.current_instance = app_processed.drop('income', axis=1).iloc[0]
             self.agent.predicted_class = app_processed['income'].iloc[0]
             
+            # CRITICAL: Pass the actual loan decision to agent for XAI explanations
+            self.agent.loan_approved = self.application.loan_approved
+            
         except Exception as e:
             # Fallback to random instance if user data setup fails
             print(f"Warning: Could not set up user instance, using random: {e}")

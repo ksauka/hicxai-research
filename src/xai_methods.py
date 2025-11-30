@@ -181,13 +181,16 @@ def explain_with_shap(agent, question_id=None):
         hrs = instance_dict.get('hours_per_week') if instance_dict else None
         edu = instance_dict.get('education') if instance_dict else None
         
-        # Determine if approved (using prediction probability or class)
-        pred_prob = getattr(agent, 'prediction_probability', None)
-        if pred_prob is not None:
-            approved = (pred_prob >= 0.50)
+        # Determine if approved - check the actual loan decision, not model prediction
+        # The model predicts income level (>50K or <=50K), but loan approval is a separate business decision
+        if hasattr(agent, 'loan_approved') and agent.loan_approved is not None:
+            approved = agent.loan_approved
+        elif predicted_class in ['>50K', '1']:
+            # If >50K income, likely approved
+            approved = True
         else:
-            # Fallback: check predicted_class
-            approved = predicted_class in ['1', '>50K', 'approved', True]
+            # If <=50K income, likely denied
+            approved = False
         
         # Build explanation with REASONING (not just lists)
         if config.show_anthropomorphic:
@@ -241,40 +244,9 @@ def explain_with_shap(agent, question_id=None):
                     base_explanation += f"• capital_loss: {fmt_money(cl)} (−)\n"
             base_explanation += "\nAnalysis based on model feature importance calculations."
         
-        # DEBUG: Print base explanation before LLM
-        print(f"\n🔍 DEBUG BASE EXPLANATION BEFORE LLM:\n{base_explanation}\n")
-        print(f"🔍 DEBUG POSITIVE FACTORS: {positive_factors}")
-        print(f"🔍 DEBUG NEGATIVE FACTORS: {negative_factors}")
-        
-        # Enhance with LLM for natural language while preserving factual content
-        try:
-            from natural_conversation import enhance_response
-            
-            context = {
-                'decision': predicted_class,
-                'num_positive_factors': len(positive_factors),
-                'num_negative_factors': len(negative_factors),
-                'explanation_type': 'feature_importance'
-            }
-            
-            # Use LLM to make it more natural while respecting anthropomorphism
-            explanation = enhance_response(
-                base_explanation, 
-                context=context,
-                response_type='explanation',
-                high_anthropomorphism=config.show_anthropomorphic
-            )
-            
-            # DEBUG: Print what LLM returned
-            print(f"\n🔍 DEBUG LLM ENHANCED EXPLANATION:\n{explanation}\n")
-            
-            # If LLM fails or returns empty, use base explanation
-            if not explanation or len(explanation.strip()) < 20:
-                explanation = base_explanation
-                
-        except Exception as e:
-            # Fallback to base explanation if LLM fails
-            explanation = base_explanation
+        # Feature importance explanations are already human-crafted with proper reasoning
+        # NO LLM enhancement needed - it only makes them worse by adding fluff
+        explanation = base_explanation
         
         result = {
             'type': 'shap',
