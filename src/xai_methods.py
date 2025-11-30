@@ -104,6 +104,10 @@ def explain_with_shap(agent, question_id=None):
                 sorted_features.insert(0, capital_item)
         
         for feature, impact in sorted_features[:15]:  # Check more features to get valid ones
+            # Skip technical features that aren't user-relevant
+            if feature in ['fnlwgt', 'education_num']:  # fnlwgt is census weight, education_num is redundant
+                continue
+                
             # Get actual value - check both direct access and one-hot encoded versions
             actual_value = instance_dict.get(feature, None) if instance_dict else None
             
@@ -117,13 +121,6 @@ def explain_with_shap(agent, question_id=None):
             # Create natural language description - skip only if value is truly missing
             if feature == 'age' and actual_value is not None:
                 factor_desc = f"Your age (being {actual_value} years old)"
-            elif feature == 'education_num' and actual_value is not None:
-                # Try to get education name if available
-                edu = get_categorical_value('education') or instance_dict.get('education', None)
-                if edu:
-                    factor_desc = f"Your education level ({edu})"
-                else:
-                    factor_desc = f"Your education level"
             elif feature == 'education':
                 edu = actual_value or get_categorical_value('education')
                 if edu:
