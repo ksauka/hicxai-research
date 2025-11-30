@@ -192,43 +192,69 @@ def explain_with_shap(agent, question_id=None):
             if len(positive_factors) + len(negative_factors) >= 10:
                 break
         
-        # Generate explanation with language differentiation
+        # Generate base explanation with language differentiation
         if config.show_anthropomorphic:
             # High anthropomorphism (Condition 6): Warm, conversational with visualizations
-            explanation = "💡 **What factors influenced your decision?**\n\n"
-            explanation += "Based on your profile, here are the key factors the model considered:\n\n"
+            base_explanation = "What factors influenced your decision?\n\n"
+            base_explanation += "Based on your profile, here are the key factors the model considered:\n\n"
             
             if positive_factors:
-                explanation += "✅ **Factors that helped you:**\n\n"
+                base_explanation += "Factors that helped you:\n"
                 for i, factor in enumerate(positive_factors[:5], 1):
-                    explanation += f"{i}. {factor}\n"
-                explanation += "\n"
+                    base_explanation += f"{i}. {factor}\n"
+                base_explanation += "\n"
             
             if negative_factors:
-                explanation += "⚠️ **Factors that worked against you:**\n\n"
+                base_explanation += "Factors that worked against you:\n"
                 for i, factor in enumerate(negative_factors[:5], 1):
-                    explanation += f"{i}. {factor}\n"
-                explanation += "\n"
+                    base_explanation += f"{i}. {factor}\n"
+                base_explanation += "\n"
             
-            explanation += "These insights are based on patterns we've seen in similar applications.\n\n"
-            explanation += "📊 **Want to explore more?** Check out the visualizations below to see exactly how each factor contributed!"
+            base_explanation += "These insights are based on patterns we've seen in similar applications.\n"
+            base_explanation += "Want to explore more? Check out the visualizations below to see exactly how each factor contributed!"
         else:
             # Low anthropomorphism (Condition 5): Technical, concise, no visualizations
-            explanation = "Feature importance analysis for loan decision:\n\n"
+            base_explanation = "Feature importance analysis for loan decision:\n\n"
             
             if positive_factors:
-                explanation += "**Positive impact features:**\n\n"
+                base_explanation += "Positive impact features:\n"
                 for i, factor in enumerate(positive_factors[:5], 1):
-                    explanation += f"{i}. {factor}\n"
-                explanation += "\n"
+                    base_explanation += f"{i}. {factor}\n"
+                base_explanation += "\n"
             
             if negative_factors:
-                explanation += "**Negative impact features:**\n\n"
+                base_explanation += "Negative impact features:\n"
                 for i, factor in enumerate(negative_factors[:5], 1):
-                    explanation += f"{i}. {factor}\n"
-                explanation += "\n"
+                    base_explanation += f"{i}. {factor}\n"
+                base_explanation += "\n"
             
-            explanation += "Analysis based on model feature importance values."
+            base_explanation += "Analysis based on model feature importance values."
+        
+        # Enhance with LLM for natural language while preserving factual content
+        try:
+            from natural_conversation import paraphrase_response
+            
+            context = {
+                'decision': predicted_class,
+                'num_positive_factors': len(positive_factors),
+                'num_negative_factors': len(negative_factors),
+                'explanation_type': 'feature_importance'
+            }
+            
+            # Use LLM to make it more natural while respecting anthropomorphism
+            explanation = paraphrase_response(
+                base_explanation, 
+                context=context,
+                high_anthropomorphism=config.show_anthropomorphic
+            )
+            
+            # If LLM fails or returns empty, use base explanation
+            if not explanation or len(explanation.strip()) < 20:
+                explanation = base_explanation
+                
+        except Exception as e:
+            # Fallback to base explanation if LLM fails
+            explanation = base_explanation
         
         result = {
             'type': 'shap',
@@ -443,35 +469,60 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 "Your work schedule (working full-time, 40+ hours per week)"
             ]
         
-        # Generate natural language explanation with language differentiation
+        # Generate base explanation with language differentiation
         if config.show_anthropomorphic:
             # High anthropomorphism: Warm, conversational
             if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
-                explanation = "💡 **What could help your application?**\n\n"
-                explanation += "Based on your current profile and similar successful applications, here are changes that might improve your chances:\n\n"
+                base_explanation = "What could help your application?\n\n"
+                base_explanation += "Based on similar successful applications, here are changes that might improve your chances:\n\n"
                 for i, change in enumerate(changes[:5], 1):
-                    explanation += f"{i}. {change}\n"
-                explanation += "\nThese suggestions are based on patterns we've seen in approved applications with similar profiles to yours."
-                explanation += "\n\n🔧 **Want to explore more?** Try the What-If Lab in the sidebar to see how different changes would affect your application in real-time!"
+                    base_explanation += f"{i}. {change}\n"
+                base_explanation += "\nThese suggestions are based on patterns we've seen in approved applications."
+                base_explanation += "\nWant to explore more? Try the What-If Lab in the sidebar to see how different changes would affect your application in real-time!"
             else:
-                explanation = "💡 **What might change the outcome?**\n\n"
-                explanation += "If circumstances were different, here are factors that could affect the decision:\n\n"
+                base_explanation = "What might change the outcome?\n\n"
+                base_explanation += "If circumstances were different, here are factors that could affect the decision:\n\n"
                 for i, change in enumerate(changes[:5], 1):
-                    explanation += f"{i}. {change}\n"
-                explanation += "\nThese insights come from analyzing similar application patterns."
-                explanation += "\n\n🔧 **Want to explore more?** Try the What-If Lab in the sidebar to test different scenarios!"
+                    base_explanation += f"{i}. {change}\n"
+                base_explanation += "\nThese insights come from analyzing similar application patterns."
+                base_explanation += "\nWant to explore more? Try the What-If Lab in the sidebar to test different scenarios!"
         else:
             # Low anthropomorphism: Technical, concise
             if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
-                explanation = "Profile modifications with positive impact on approval probability:\n\n"
+                base_explanation = "Profile modifications with positive impact on approval probability:\n\n"
                 for i, change in enumerate(changes[:5], 1):
-                    explanation += f"{i}. {change}\n"
-                explanation += "\nAnalysis based on approved application patterns with similar baseline profiles."
+                    base_explanation += f"{i}. {change}\n"
+                base_explanation += "\nAnalysis based on approved application patterns with similar baseline profiles."
             else:
-                explanation = "Factors that could modify current decision:\n\n"
+                base_explanation = "Factors that could modify current decision:\n\n"
                 for i, change in enumerate(changes[:5], 1):
-                    explanation += f"{i}. {change}\n"
-                explanation += "\nData-driven insights from comparative application analysis."
+                    base_explanation += f"{i}. {change}\n"
+                base_explanation += "\nData-driven insights from comparative application analysis."
+        
+        # Enhance with LLM for natural language while preserving factual content
+        try:
+            from natural_conversation import paraphrase_response
+            
+            context = {
+                'decision': current_pred,
+                'num_changes': len(changes),
+                'explanation_type': 'counterfactual'
+            }
+            
+            # Use LLM to make it more natural while respecting anthropomorphism
+            explanation = paraphrase_response(
+                base_explanation, 
+                context=context,
+                high_anthropomorphism=config.show_anthropomorphic
+            )
+            
+            # If LLM fails or returns empty, use base explanation
+            if not explanation or len(explanation.strip()) < 20:
+                explanation = base_explanation
+                
+        except Exception as e:
+            # Fallback to base explanation if LLM fails
+            explanation = base_explanation
         
         # Ensure current_instance is a dict for return values
         instance_dict = current_instance
