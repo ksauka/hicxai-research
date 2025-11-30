@@ -247,17 +247,25 @@ def explain_with_dice(agent, target_class=None, features='all'):
             # Extract changes from counterfactuals using natural language
             cf_df = dice_exp.cf_examples_list[0].final_cfs_df
             
-            if cf_df is not None and len(cf_df) > 0:
+            # Check if counterfactuals were generated (handle DataFrame properly)
+            has_cf = cf_df is not None and isinstance(cf_df, pd.DataFrame) and len(cf_df) > 0
+            if has_cf:
                 # Compare with original instance and format naturally
                 for col in query_instance.columns:
+                    # Extract scalar values properly
                     orig_val = query_instance[col].values[0]
-                    cf_val = cf_df[col].iloc[0]
+                    cf_val = cf_df[col].values[0] if hasattr(cf_df[col], 'values') else cf_df[col].iloc[0]
                     
-                    # Handle comparison properly for pandas types
+                    # Convert to comparable types and check difference
                     try:
-                        is_different = bool(orig_val != cf_val)
-                    except (ValueError, TypeError):
-                        is_different = str(orig_val) != str(cf_val)
+                        # Handle numeric comparison
+                        if isinstance(orig_val, (int, float, np.number)) and isinstance(cf_val, (int, float, np.number)):
+                            is_different = float(orig_val) != float(cf_val)
+                        else:
+                            # Handle string/categorical comparison
+                            is_different = str(orig_val) != str(cf_val)
+                    except Exception:
+                        is_different = False
                     
                     if is_different:
                         # Format with natural language based on feature type
