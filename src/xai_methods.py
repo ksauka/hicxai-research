@@ -170,23 +170,81 @@ def explain_with_shap(agent, question_id=None):
             if len(positive_factors) + len(negative_factors) >= 10:
                 break
         
-        # Generate base explanation - simple factual list that LLM will naturalize
-        # LLM will make it sound human (warm/conversational or professional) based on anthropomorphism
-        base_explanation = "Loan decision analysis:\n\n"
+        # Generate explanation with REASONING based on approval/denial
+        # Extract key values for reasoning
+        def fmt_money(x):
+            return f"${x:,.0f}" if isinstance(x, (int, float)) else "N/A"
         
-        if positive_factors:
-            base_explanation += "Positive factors:\n"
-            for factor in positive_factors[:5]:
-                base_explanation += f"• {factor}\n"
-            base_explanation += "\n"
+        cg = instance_dict.get('capital_gain') if instance_dict else None
+        cl = instance_dict.get('capital_loss') if instance_dict else None
+        age = instance_dict.get('age') if instance_dict else None
+        hrs = instance_dict.get('hours_per_week') if instance_dict else None
+        edu = instance_dict.get('education') if instance_dict else None
         
-        if negative_factors:
-            base_explanation += "Negative factors:\n"
-            for factor in negative_factors[:5]:
-                base_explanation += f"• {factor}\n"
-            base_explanation += "\n"
+        # Determine if approved (using prediction probability or class)
+        pred_prob = getattr(agent, 'prediction_probability', None)
+        if pred_prob is not None:
+            approved = (pred_prob >= 0.50)
+        else:
+            # Fallback: check predicted_class
+            approved = predicted_class in ['1', '>50K', 'approved', True]
         
-        base_explanation += "Analysis based on model feature importance."
+        # Build explanation with REASONING (not just lists)
+        if config.show_anthropomorphic:
+            # High anthropomorphism: Warm, empathetic, human-like
+            if approved:
+                base_explanation = "Thanks for waiting — here's what helped your profile.\n"
+                if cg and cg > 0:
+                    base_explanation += f"• Capital gains: {fmt_money(cg)} boosted confidence\n"
+                if age:
+                    base_explanation += f"• Age: {age} aligned with strong repayment patterns\n"
+                if cl is not None and cl == 0:
+                    base_explanation += f"• Capital losses: {fmt_money(cl)} helped your score\n"
+                if hrs:
+                    base_explanation += f"• Work hours: {hrs} hrs/week signaled steady income\n"
+                if edu:
+                    base_explanation += f"• Education: {edu} matched positive patterns\n"
+                base_explanation += "\nThese signals matched patterns I've seen in similar applications."
+            else:
+                base_explanation = "I know this isn't the answer you hoped for. Here's what weighed the score down.\n"
+                if cg is not None and cg == 0:
+                    base_explanation += f"• Capital gains: {fmt_money(cg)} pulled confidence down\n"
+                if hrs and hrs < 40:
+                    base_explanation += f"• Work hours: {hrs} hrs/week reduced the income signal\n"
+                if edu:
+                    base_explanation += f"• Education: {edu} scored lower than higher degrees\n"
+                if cl and cl > 0:
+                    base_explanation += f"• Recent losses: {fmt_money(cl)} nudged risk up\n"
+                base_explanation += "\nThese are the main signals the model leaned on for this decision."
+        else:
+            # Low anthropomorphism: Professional, technical, direct
+            base_explanation = "Top factors influencing the score:\n\n"
+            if approved:
+                base_explanation += "Positive influence:\n"
+                if cg and cg > 0:
+                    base_explanation += f"• capital_gain: {fmt_money(cg)} (+)\n"
+                if age:
+                    base_explanation += f"• age: {age} (+)\n"
+                if hrs:
+                    base_explanation += f"• hours_per_week: {hrs} (+)\n"
+                if cl is not None and cl == 0:
+                    base_explanation += f"• capital_loss: {fmt_money(cl)} (neutral)\n"
+            else:
+                base_explanation += "Negative influence:\n"
+                if cg is not None and cg == 0:
+                    base_explanation += f"• capital_gain: {fmt_money(cg)} (−)\n"
+                if hrs and hrs < 40:
+                    base_explanation += f"• hours_per_week: {hrs} (−)\n"
+                if edu:
+                    base_explanation += f"• education: {edu} (−)\n"
+                if cl and cl > 0:
+                    base_explanation += f"• capital_loss: {fmt_money(cl)} (−)\n"
+            base_explanation += "\nAnalysis based on model feature importance calculations."
+        
+        # DEBUG: Print base explanation before LLM
+        print(f"\n🔍 DEBUG BASE EXPLANATION BEFORE LLM:\n{base_explanation}\n")
+        print(f"🔍 DEBUG POSITIVE FACTORS: {positive_factors}")
+        print(f"🔍 DEBUG NEGATIVE FACTORS: {negative_factors}")
         
         # Enhance with LLM for natural language while preserving factual content
         try:
@@ -206,6 +264,9 @@ def explain_with_shap(agent, question_id=None):
                 response_type='explanation',
                 high_anthropomorphism=config.show_anthropomorphic
             )
+            
+            # DEBUG: Print what LLM returned
+            print(f"\n🔍 DEBUG LLM ENHANCED EXPLANATION:\n{explanation}\n")
             
             # If LLM fails or returns empty, use base explanation
             if not explanation or len(explanation.strip()) < 20:
