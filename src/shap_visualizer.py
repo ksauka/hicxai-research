@@ -188,56 +188,63 @@ def create_shap_waterfall_plot(feature_impacts, base_probability=0.5, prediction
         st.error(f"Error creating waterfall plot: {e}")
         return None
 
-def display_shap_explanation(explanation_result, show_visuals=True):
+def display_shap_explanation(explanation_result):
     """
-    Display SHAP explanation with optional visualizations
+    Display SHAP explanation with visualizations (only called when show_shap_visualizations=True)
     
     Args:
         explanation_result: Dict with SHAP explanation data
-        show_visuals: Whether to show visual plots (A/B test variable)
     """
     if explanation_result.get('type') != 'shap':
         return
     
-    # Text explanation (always shown)
-    st.write("### 🔍 Feature Importance Analysis")
-    st.write(explanation_result.get('explanation', 'No explanation available'))
-    
-    # Visual explanations (only in V1)
-    if show_visuals and 'feature_impacts' in explanation_result:
-        st.write("### 📊 Visual Analysis")
+    # Visual explanations - show plots
+    if 'feature_impacts' in explanation_result and explanation_result['feature_impacts']:
         
         # Create tabs for different visualizations
         tab1, tab2 = st.tabs(["📊 Feature Impact", "🌊 Waterfall Analysis"])
         
         with tab1:
             st.write("**How each feature affects the prediction:**")
-            fig1 = create_shap_bar_plot(
-                explanation_result['feature_impacts'],
-                explanation_result.get('prediction_class', 'Unknown'),
-                "Feature Importance (SHAP Values)"
-            )
-            if fig1:
-                st.pyplot(fig1)
-                plt.close(fig1)  # Clean up memory
+            try:
+                fig1 = create_shap_bar_plot(
+                    explanation_result['feature_impacts'],
+                    explanation_result.get('prediction_class', 'Unknown'),
+                    "Feature Importance Analysis"
+                )
+                if fig1:
+                    st.pyplot(fig1)
+                    plt.close(fig1)  # Clean up memory
+                else:
+                    st.warning("Unable to generate feature impact chart")
+            except Exception as e:
+                st.error(f"Error creating feature impact chart: {str(e)}")
         
         with tab2:
             st.write("**Step-by-step impact on prediction probability:**")
-            fig2 = create_shap_waterfall_plot(
-                explanation_result['feature_impacts'],
-                base_probability=0.5,
-                prediction_class=explanation_result.get('prediction_class', 'Unknown')
-            )
-            if fig2:
-                st.pyplot(fig2)
-                plt.close(fig2)  # Clean up memory
+            try:
+                fig2 = create_shap_waterfall_plot(
+                    explanation_result['feature_impacts'],
+                    base_probability=0.5,
+                    prediction_class=explanation_result.get('prediction_class', 'Unknown')
+                )
+                if fig2:
+                    st.pyplot(fig2)
+                    plt.close(fig2)  # Clean up memory
+                else:
+                    st.warning("Unable to generate waterfall chart")
+            except Exception as e:
+                st.error(f"Error creating waterfall chart: {str(e)}")
         
         # Feature impact breakdown
         st.write("### 📋 Detailed Feature Impacts")
-        impacts_df = pd.DataFrame({
-            'Feature Impact': explanation_result['feature_impacts']
-        })
-        st.dataframe(impacts_df, use_container_width=True)
+        try:
+            impacts_df = pd.DataFrame({
+                'Feature Impact': explanation_result['feature_impacts']
+            })
+            st.dataframe(impacts_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error displaying feature impacts table: {str(e)}")
 
 def explain_shap_visualizations():
     """Provide educational content about SHAP visualizations"""

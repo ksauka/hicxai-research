@@ -130,14 +130,14 @@ class LoanAssistant:
             'race': "What's your race? (e.g., White, Asian-Pac-Islander, Amer-Indian-Eskimo, Other, Black)",
             'native_country': "What's your native country? (e.g., United-States, Cambodia, England, Puerto-Rico, Canada, Germany, etc.)",
             'relationship': "What's your relationship status? (e.g., Wife, Own-child, Husband, Not-in-family, Other-relative, Unmarried)",
-            'capital_gain': "Do you have any capital gains this year? (Enter amount or 0 if none)",
+            'capital_gain': "Enter your capital gains for this year. Range: -5000 (losses) to 9000. Enter 0 if none.",
             'capital_loss': "Do you have any capital losses this year? (Enter amount or 0 if none)"
         }
         
         self.validation_rules = {
             'age': {'type': 'int', 'min': 17, 'max': 90},
             'hours_per_week': {'type': 'int', 'min': 1, 'max': 99},
-            'capital_gain': {'type': 'int', 'min': 0, 'max': 99999},
+            'capital_gain': {'type': 'int', 'min': -5000, 'max': 9000},
             'capital_loss': {'type': 'int', 'min': 0, 'max': 4356},
             'education_num': {'type': 'int', 'min': 1, 'max': 16}
         }
@@ -751,10 +751,10 @@ class LoanAssistant:
                         warning = "That is an unusually high number of weekly hours. Please confirm this is intentional."
                     if field == 'age' and int_val >= 85:
                         warning = (warning or "") + (" " if warning else "") + "Age is at the extreme upper bound of the dataset."
-                    if field == 'capital_gain' and int_val > 50000:
-                        warning = (warning or "") + (" " if warning else "") + "Capital gain is exceptionally high relative to typical values."
-                    if field == 'capital_loss' and int_val > 3000:
-                        warning = (warning or "") + (" " if warning else "") + "Capital loss is unusually high relative to typical values."
+                    if field == 'capital_gain' and int_val > 5000:
+                        warning = (warning or "") + (" " if warning else "") + "Note: Capital gains above $5,000 are relatively uncommon in this assessment."
+                    if field == 'capital_loss' and int_val > 2000:
+                        warning = (warning or "") + (" " if warning else "") + "Capital loss values above $2,000 are less common."
                     result = {'valid': True, 'message': '', 'normalized': int_val}
                     if warning:
                         result['warning'] = warning
