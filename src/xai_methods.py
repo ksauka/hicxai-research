@@ -69,6 +69,20 @@ def explain_with_shap(agent, question_id=None):
                 except:
                     instance_dict = {}
         
+        # For categorical features that are one-hot encoded, we need to find the original value
+        # by checking which encoded column has value 1
+        def get_categorical_value(feature_base):
+            """Extract original categorical value from one-hot encoded columns"""
+            if not instance_dict:
+                return None
+            # Look for columns like 'workclass_Private', 'workclass_Self-emp-not-inc'
+            matching_cols = [col for col in instance_dict.keys() if col.startswith(f"{feature_base}_")]
+            for col in matching_cols:
+                if instance_dict.get(col) == 1 or instance_dict.get(col) == 1.0:
+                    # Extract the value after the underscore
+                    return col.split(f"{feature_base}_", 1)[1] if "_" in col else None
+            return None
+        
         # Check if we have any feature importance data
         if not feature_importance:
             return {
@@ -89,37 +103,85 @@ def explain_with_shap(agent, question_id=None):
                 capital_item = sorted_features.pop(capital_idx)
                 sorted_features.insert(0, capital_item)
         
-        for feature, impact in sorted_features[:10]:  # Top 10 features (increased from 8)
-            # Get actual value from user's instance
-            actual_value = instance_dict.get(feature, 'N/A') if instance_dict else 'N/A'
+        for feature, impact in sorted_features[:15]:  # Check more features to get valid ones
+            # Get actual value - check both direct access and one-hot encoded versions
+            actual_value = instance_dict.get(feature, None) if instance_dict else None
             
-            # Create natural language description
-            if feature == 'age':
+            # For categorical features, try to get the value from one-hot encoded columns
+            if actual_value is None:
+                categorical_features = ['workclass', 'education', 'marital_status', 'occupation', 
+                                       'relationship', 'race', 'sex', 'native_country']
+                if feature in categorical_features:
+                    actual_value = get_categorical_value(feature)
+            
+            # Create natural language description - skip only if value is truly missing
+            if feature == 'age' and actual_value is not None:
                 factor_desc = f"Your age (being {actual_value} years old)"
-            elif feature == 'education_num' or feature == 'education':
-                edu = instance_dict.get('education', 'your education level') if instance_dict else 'your education level'
-                factor_desc = f"Your education level ({edu})"
-            elif feature == 'hours_per_week':
+            elif feature == 'education_num' and actual_value is not None:
+                # Try to get education name if available
+                edu = get_categorical_value('education') or instance_dict.get('education', None)
+                if edu:
+                    factor_desc = f"Your education level ({edu})"
+                else:
+                    factor_desc = f"Your education level"
+            elif feature == 'education':
+                edu = actual_value or get_categorical_value('education')
+                if edu:
+                    factor_desc = f"Your education level ({edu})"
+                else:
+                    continue
+            elif feature == 'hours_per_week' and actual_value is not None:
                 factor_desc = f"Your work schedule (working {actual_value} hours per week)"
-            elif feature == 'capital_gain':
+            elif feature == 'capital_gain' and actual_value is not None:
                 factor_desc = f"Your capital gains (${actual_value})"
-            elif feature == 'capital_loss':
+            elif feature == 'capital_loss' and actual_value is not None:
                 factor_desc = f"Your capital losses (${actual_value})"
             elif feature == 'marital_status':
-                factor_desc = f"Your marital status ({actual_value})"
+                val = actual_value or get_categorical_value('marital_status')
+                if val:
+                    factor_desc = f"Your marital status ({val})"
+                else:
+                    continue
             elif feature == 'occupation':
-                factor_desc = f"Your occupation ({actual_value})"
+                val = actual_value or get_categorical_value('occupation')
+                if val:
+                    factor_desc = f"Your occupation ({val})"
+                else:
+                    continue
             elif feature == 'relationship':
-                factor_desc = f"Your relationship status ({actual_value})"
+                val = actual_value or get_categorical_value('relationship')
+                if val:
+                    factor_desc = f"Your relationship status ({val})"
+                else:
+                    continue
             elif feature == 'workclass':
-                factor_desc = f"Your work class ({actual_value})"
+                val = actual_value or get_categorical_value('workclass')
+                if val:
+                    factor_desc = f"Your work class ({val})"
+                else:
+                    continue
             elif feature == 'native_country':
-                factor_desc = f"Your country ({actual_value})"
+                val = actual_value or get_categorical_value('native_country')
+                if val:
+                    factor_desc = f"Your country ({val})"
+                else:
+                    continue
             elif feature == 'race':
-                factor_desc = f"Your race ({actual_value})"
+                val = actual_value or get_categorical_value('race')
+                if val:
+                    factor_desc = f"Your race ({val})"
+                else:
+                    continue
             elif feature == 'sex':
-                factor_desc = f"Your gender ({actual_value})"
+                val = actual_value or get_categorical_value('sex')
+                if val:
+                    factor_desc = f"Your gender ({val})"
+                else:
+                    continue
             else:
+                # Generic fallback - only skip if value is None or empty
+                if actual_value is None or str(actual_value).strip() == '':
+                    continue
                 factor_desc = f"Your {feature.replace('_', ' ')} ({actual_value})"
             
             if impact > 0:
@@ -128,6 +190,10 @@ def explain_with_shap(agent, question_id=None):
             else:
                 negative_factors.append(factor_desc)
                 feature_impacts.append(f"{feature} decreases the prediction probability by {abs(impact):.3f}")
+            
+            # Stop once we have enough features (8-10 total)
+            if len(positive_factors) + len(negative_factors) >= 10:
+                break
         
         # Generate explanation with language differentiation
         if config.show_anthropomorphic:
