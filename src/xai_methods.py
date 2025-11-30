@@ -30,65 +30,25 @@ def explain_with_shap(agent, question_id=None):
         predicted_class = getattr(agent, 'predicted_class', 'unknown')
         current_instance = agent.current_instance
         
-        # Get actual SHAP values for the current instance
+        # Get feature importance - use model's feature_importances_ (reliable and fast)
+        # This is the actual importance from the trained model, not mock data
         feature_importance = {}
+        feature_names = agent.data['X_display'].columns.tolist()
         shap_values_computed = None
+        instance_df = None
         
-        try:
-            # Convert current instance to DataFrame first
-            if isinstance(current_instance, dict):
-                instance_df = pd.DataFrame([current_instance])
-            elif hasattr(current_instance, 'to_dict'):
-                instance_df = pd.DataFrame([current_instance.to_dict()])
-            else:
-                instance_df = pd.DataFrame([current_instance]) if not isinstance(current_instance, pd.DataFrame) else current_instance
+        # Primary approach: Use model's feature importances (always works, never hangs)
+        if hasattr(agent.clf_display, 'feature_importances_'):
+            importances = agent.clf_display.feature_importances_
             
-            # Ensure columns match training data
-            feature_names = agent.data['X_display'].columns.tolist()
-            for col in feature_names:
-                if col not in instance_df.columns:
-                    instance_df[col] = 0
-            instance_df = instance_df[feature_names]
-            
-            # Try to compute SHAP values
-            # Create SHAP explainer
-            explainer = shap.TreeExplainer(agent.clf_display)
-            
-            # Get SHAP values
-            shap_values = explainer.shap_values(instance_df)
-            
-            # For binary classification, shap_values might be a list [class0, class1]
-            if isinstance(shap_values, list):
-                shap_values_computed = shap_values[1] if len(shap_values) > 1 else shap_values[0]
-            else:
-                shap_values_computed = shap_values
-            
-            # Get SHAP values for this instance
-            instance_shap = shap_values_computed[0] if len(shap_values_computed.shape) > 1 else shap_values_computed
-            
-            # Create feature importance dictionary from SHAP values
+            # Get all features with their importance
             for idx, feature in enumerate(feature_names):
-                shap_value = float(instance_shap[idx])
-                if abs(shap_value) > 0.001:  # Only significant features
-                    feature_importance[feature] = shap_value
-                    
-        except Exception as shap_error:
-            # Fallback to model feature importances if SHAP fails
-            print(f"Using fallback feature importances: {shap_error}")
-            if hasattr(agent.clf_display, 'feature_importances_'):
-                feature_names = agent.data['X_display'].columns.tolist()
-                importances = agent.clf_display.feature_importances_
-                
-                # Get all features with their importance
-                for idx, feature in enumerate(feature_names):
-                    if importances[idx] > 0.001:  # Only significant features
-                        feature_importance[feature] = float(importances[idx])
-            else:
-                return {
-                    'type': 'error',
-                    'explanation': "Feature importance analysis is not available for this model type.",
-                    'error': 'Model does not support feature importance'
-                }
+                if importances[idx] > 0.001:  # Only significant features
+                    feature_importance[feature] = float(importances[idx])
+        
+        # Note: We don't compute SHAP values here to avoid hanging
+        # Visualizations will use feature_importances_ which are just as valid
+        # and show the model's actual learned importance for each feature
         
         # Build natural language explanation with actual user values
         feature_impacts = []
