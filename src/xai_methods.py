@@ -192,42 +192,79 @@ def explain_with_shap(agent, question_id=None):
             # If <=50K income, likely denied
             approved = False
         
-        # Build explanation with REASONING based on top features from model
-        # Use sorted_features to determine what to show
-        top_features = {}
-        for feature, impact in sorted_features[:5]:  # Top 5 features
-            # Extract the actual feature name (handle one-hot encoding)
-            if '_' in feature and any(feature.startswith(p) for p in ['workclass_', 'education_', 'marital_status_', 'occupation_', 'relationship_', 'race_', 'sex_', 'native_country_']):
-                feat_name = feature.split('_')[0]
+        # Build explanation with REASONING
+        # KEY INSIGHT: All features except capital_loss are positively correlated with approval
+        # They might not be "enough" but they don't hurt - only capital_loss can truly hurt
+        
+        # Collect top features with their values
+        top_feature_list = []
+        for feature, impact in sorted_features[:8]:
+            # Get actual value
+            if feature in instance_dict:
+                value = instance_dict[feature]
             else:
-                feat_name = feature
-            top_features[feat_name] = impact
+                # Handle one-hot encoded
+                for prefix in ['workclass_', 'education_', 'marital_status_', 'occupation_', 'relationship_', 'race_', 'sex_', 'native_country_']:
+                    if feature.startswith(prefix):
+                        value = feature.replace(prefix, '')
+                        break
+                else:
+                    value = None
+            
+            if value is not None:
+                top_feature_list.append((feature, value, impact))
         
         if config.show_anthropomorphic:
             # High anthropomorphism: Warm, empathetic, human-like
             if approved:
                 base_explanation = "Thanks for waiting — here's what helped your profile.\n"
-                if 'capital' in top_features or cg:
-                    base_explanation += f"• Capital gains: {fmt_money(cg) if cg else '$0'} boosted confidence\n"
-                if 'age' in top_features or age:
-                    base_explanation += f"• Age: {age if age else 'N/A'} aligned with strong repayment patterns\n"
-                if 'capital' in top_features or cl is not None:
-                    base_explanation += f"• Capital losses: {fmt_money(cl) if cl is not None else '$0'} helped your score\n"
-                if 'hours' in top_features or hrs:
-                    base_explanation += f"• Work hours: {hrs if hrs else 'N/A'} hrs/week signaled steady income\n"
-                if 'education' in top_features or edu:
-                    base_explanation += f"• Education: {edu if edu else 'N/A'} matched positive patterns\n"
+                for feature, value, impact in top_feature_list[:4]:
+                    if 'capital_gain' in feature:
+                        base_explanation += f"• Capital gains: {fmt_money(value)} boosted confidence\n"
+                    elif 'age' in feature:
+                        base_explanation += f"• Age: {value} aligned with strong repayment patterns\n"
+                    elif 'hours' in feature:
+                        base_explanation += f"• Work hours: {value} hrs/week signaled steady income\n"
+                    elif 'education' in feature:
+                        base_explanation += f"• Education: {value} matched positive patterns\n"
                 base_explanation += "\nThese signals matched patterns I've seen in similar applications."
             else:
-                base_explanation = "I know this isn't the answer you hoped for. Here's what weighed the score down.\n"
-                if 'capital' in top_features or cg is not None:
-                    base_explanation += f"• Capital gains: {fmt_money(cg) if cg is not None else '$0'} pulled confidence down\n"
-                if 'hours' in top_features or hrs:
-                    base_explanation += f"• Work hours: {hrs if hrs else 'N/A'} hrs/week reduced the income signal\n"
-                if 'education' in top_features or edu:
-                    base_explanation += f"• Education: {edu if edu else 'N/A'} scored lower than higher degrees\n"
-                if cl and cl > 0:
-                    base_explanation += f"• Recent losses: {fmt_money(cl)} nudged risk up\n"
+                # DENIED: Frame positively correlated features as "helped but not enough"
+                # Only capital_loss truly hurts
+                base_explanation = "I know this isn't the answer you hoped for. Here's what the model considered:\n"
+                
+                # Check for capital_loss first (only truly negative factor)
+                has_capital_loss = False
+                for feature, value, impact in top_feature_list:
+                    if 'capital_loss' in feature and value > 0:
+                        base_explanation += f"• Capital losses: {fmt_money(value)} reduced your score\n"
+                        has_capital_loss = True
+                        break
+                
+                # Other factors: frame as positive but not sufficient
+                count = 0
+                for feature, value, impact in top_feature_list:
+                    if 'capital_loss' in feature:
+                        continue  # Already handled
+                    if count >= 3:
+                        break
+                    
+                    if 'capital_gain' in feature:
+                        if value == 0 or value < 1000:
+                            base_explanation += f"• Capital gains: {fmt_money(value)} — could be higher\n"
+                        else:
+                            base_explanation += f"• Capital gains: {fmt_money(value)} helped, but other factors weighed more\n"
+                    elif 'hours' in feature:
+                        if value < 40:
+                            base_explanation += f"• Work hours: {value} hrs/week — full-time work scores higher\n"
+                        else:
+                            base_explanation += f"• Work hours: {value} hrs/week was positive\n"
+                    elif 'education' in feature:
+                        base_explanation += f"• Education: {value} — the model favors advanced degrees\n"
+                    elif 'age' in feature:
+                        base_explanation += f"• Age: {value} was a factor\n"
+                    count += 1
+                
                 base_explanation += "\nThese are the main signals the model leaned on for this decision."
         else:
             # Low anthropomorphism: Professional, technical, direct
