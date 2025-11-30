@@ -132,22 +132,54 @@ def explain_with_shap(agent, question_id=None):
         # Generate explanation with language differentiation
         if config.show_anthropomorphic:
             # High anthropomorphism: Warm, conversational
-            explanation = "Let me break down the key factors that influenced your loan decision:\n\n"
+            explanation = "Let me explain how the model analyzed your application:\n\n"
+            
             if positive_factors:
-                explanation += f"✅ **Factors that helped you**: {', '.join(positive_factors)}\n\n"
+                explanation += "✅ **These factors worked in your favor:**\n"
+                for factor in positive_factors[:5]:
+                    explanation += f"• {factor}\n"
+                explanation += "\n"
+            
             if negative_factors:
-                explanation += f"⚠️ **Factors that worked against you**: {', '.join(negative_factors)}\n\n"
-            explanation += "Each factor was carefully weighted based on its importance in the lending decision. "
-            explanation += "The features shown above had the strongest impact on your result.\n\n"
-            explanation += "📊 **Want to see more details?** Check out the interactive visualizations below to explore exactly how each factor contributed!"
+                explanation += "⚠️ **These factors may have limited approval:**\n"
+                for factor in negative_factors[:5]:
+                    explanation += f"• {factor}\n"
+                explanation += "\n"
+            
+            explanation += "The model weighs each of these factors based on patterns it learned from thousands of past applications. "
+            explanation += "Your specific combination of features led to the decision you received.\n\n"
+            
+            if config.show_shap_visualizations:
+                explanation += "📊 **Check out the visualizations below** to see exactly how much each factor contributed to your result!"
         else:
             # Low anthropomorphism: Technical, concise
-            explanation = "Feature importance analysis for loan decision:\n\n"
+            explanation = "**Feature Importance Analysis**\n\n"
+            explanation += f"Decision: **{predicted_class}**\n\n"
+            
             if positive_factors:
-                explanation += f"**Positive impact features**: {', '.join(positive_factors)}\n\n"
+                explanation += "**Positive Impact Factors:**\n"
+                for i, factor in enumerate(positive_factors[:5], 1):
+                    # Extract importance value from feature_impacts
+                    matching_impact = next((imp for imp in feature_impacts if factor.split('(')[0].strip() in imp), None)
+                    if matching_impact and 'by' in matching_impact:
+                        importance = matching_impact.split('by')[-1].strip()
+                        explanation += f"{i}. {factor} [+{importance}]\n"
+                    else:
+                        explanation += f"{i}. {factor}\n"
+                explanation += "\n"
+            
             if negative_factors:
-                explanation += f"**Negative impact features**: {', '.join(negative_factors)}\n\n"
-            explanation += "Features weighted by model importance. Top contributing factors displayed above."
+                explanation += "**Negative Impact Factors:**\n"
+                for i, factor in enumerate(negative_factors[:5], 1):
+                    matching_impact = next((imp for imp in feature_impacts if factor.split('(')[0].strip() in imp), None)
+                    if matching_impact and 'by' in matching_impact:
+                        importance = matching_impact.split('by')[-1].strip()
+                        explanation += f"{i}. {factor} [-{importance}]\n"
+                    else:
+                        explanation += f"{i}. {factor}\n"
+                explanation += "\n"
+            
+            explanation += "Analysis based on trained model feature importance values."
         
         result = {
             'type': 'shap',
