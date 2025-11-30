@@ -104,6 +104,10 @@ def explain_with_shap(agent, question_id=None):
                 sorted_features.insert(0, capital_item)
         
         for feature, impact in sorted_features[:15]:  # Check more features to get valid ones
+            # Skip technical features first (before any processing)
+            if feature in ['fnlwgt', 'education_num']:  # fnlwgt is census weight, education_num is redundant
+                continue
+            
             # Check if this is a one-hot encoded feature (e.g., workclass_Private)
             categorical_prefixes = ['workclass_', 'education_', 'marital_status_', 'occupation_', 
                                    'relationship_', 'race_', 'sex_', 'native_country_']
@@ -121,10 +125,6 @@ def explain_with_shap(agent, question_id=None):
                 # Regular numeric feature
                 actual_value = instance_dict.get(feature, None) if instance_dict else None
                 feature_base = feature
-            
-            # Skip technical features that aren't user-relevant (check after extracting feature_base)
-            if feature_base in ['fnlwgt', 'education_num']:  # fnlwgt is census weight, education_num is redundant
-                continue
             
             # Skip if value is missing
             if actual_value is None or str(actual_value).strip() == '':
