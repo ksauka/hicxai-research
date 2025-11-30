@@ -232,7 +232,7 @@ def explain_with_shap(agent, question_id=None):
         
         # Enhance with LLM for natural language while preserving factual content
         try:
-            from natural_conversation import paraphrase_response
+            from natural_conversation import enhance_response
             
             context = {
                 'decision': predicted_class,
@@ -242,9 +242,10 @@ def explain_with_shap(agent, question_id=None):
             }
             
             # Use LLM to make it more natural while respecting anthropomorphism
-            explanation = paraphrase_response(
+            explanation = enhance_response(
                 base_explanation, 
                 context=context,
+                response_type='explanation',
                 high_anthropomorphism=config.show_anthropomorphic
             )
             
@@ -501,7 +502,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
         
         # Enhance with LLM for natural language while preserving factual content
         try:
-            from natural_conversation import paraphrase_response
+            from natural_conversation import enhance_response
             
             context = {
                 'decision': current_pred,
@@ -510,9 +511,10 @@ def explain_with_dice(agent, target_class=None, features='all'):
             }
             
             # Use LLM to make it more natural while respecting anthropomorphism
-            explanation = paraphrase_response(
+            explanation = enhance_response(
                 base_explanation, 
                 context=context,
+                response_type='explanation',
                 high_anthropomorphism=config.show_anthropomorphic
             )
             
