@@ -170,43 +170,23 @@ def explain_with_shap(agent, question_id=None):
             if len(positive_factors) + len(negative_factors) >= 10:
                 break
         
-        # Generate base explanation with language differentiation
-        if config.show_anthropomorphic:
-            # High anthropomorphism (Condition 6): Warm, conversational with visualizations
-            base_explanation = "What factors influenced your decision?\n\n"
-            base_explanation += "Based on your profile, here are the key factors the model considered:\n\n"
-            
-            if positive_factors:
-                base_explanation += "Factors that helped you:\n"
-                for i, factor in enumerate(positive_factors[:5], 1):
-                    base_explanation += f"{i}. {factor}\n"
-                base_explanation += "\n"
-            
-            if negative_factors:
-                base_explanation += "Factors that worked against you:\n"
-                for i, factor in enumerate(negative_factors[:5], 1):
-                    base_explanation += f"{i}. {factor}\n"
-                base_explanation += "\n"
-            
-            base_explanation += "These insights are based on patterns we've seen in similar applications.\n"
-            base_explanation += "Want to explore more? Check out the visualizations below to see exactly how each factor contributed!"
-        else:
-            # Low anthropomorphism (Condition 5): Technical, concise, no visualizations
-            base_explanation = "Feature importance analysis for loan decision:\n\n"
-            
-            if positive_factors:
-                base_explanation += "Positive impact features:\n"
-                for i, factor in enumerate(positive_factors[:5], 1):
-                    base_explanation += f"{i}. {factor}\n"
-                base_explanation += "\n"
-            
-            if negative_factors:
-                base_explanation += "Negative impact features:\n"
-                for i, factor in enumerate(negative_factors[:5], 1):
-                    base_explanation += f"{i}. {factor}\n"
-                base_explanation += "\n"
-            
-            base_explanation += "Analysis based on model feature importance values."
+        # Generate base explanation - simple factual list that LLM will naturalize
+        # LLM will make it sound human (warm/conversational or professional) based on anthropomorphism
+        base_explanation = "Loan decision analysis:\n\n"
+        
+        if positive_factors:
+            base_explanation += "Positive factors:\n"
+            for factor in positive_factors[:5]:
+                base_explanation += f"• {factor}\n"
+            base_explanation += "\n"
+        
+        if negative_factors:
+            base_explanation += "Negative factors:\n"
+            for factor in negative_factors[:5]:
+                base_explanation += f"• {factor}\n"
+            base_explanation += "\n"
+        
+        base_explanation += "Analysis based on model feature importance."
         
         # Enhance with LLM for natural language while preserving factual content
         try:

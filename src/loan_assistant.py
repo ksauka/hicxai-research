@@ -573,31 +573,8 @@ class LoanAssistant:
             else:
                 formatted_explanation = str(explanation)
 
-            # REQUIRED: Enhance response to respect anthropomorphism condition
-            try:
-                if NATURAL_CONVERSATION_AVAILABLE:
-                    # Get the intent result from either path (main or fallback)
-                    final_intent_result = locals().get('intent_result_fallback') or locals().get('intent_result')
-                    
-                    context_info = {
-                        'intent': final_intent_result.get('intent') if isinstance(final_intent_result, dict) else None,
-                        'matched_question': locals().get('matched_question'),
-                        'prediction': self.agent.predicted_class
-                    }
-                    # Pass anthropomorphism flag to LLM for appropriate tone
-                    enhanced = enhance_response(
-                        formatted_explanation, 
-                        context_info, 
-                        response_type="explanation",
-                        high_anthropomorphism=config.show_anthropomorphic
-                    )
-                    if enhanced and enhanced != formatted_explanation:
-                        formatted_explanation = enhanced
-            except Exception as e:
-                pass
-            
-            # Humanize explanation for high anthropomorphism if not already done by LLM
-            # LLM already handles anthropomorphism differentiation, just return the explanation
+            # XAI methods already enhance with LLM - no need to enhance again
+            # Double enhancement causes wrapper text and duplicate content
             return f"**Explanation:**\n\n{formatted_explanation}"
             
         except Exception as e:
