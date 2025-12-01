@@ -311,45 +311,82 @@ def explain_with_shap(agent, question_id=None):
                     base_explanation += f"\nThat lifted your score by **+{total_lift:.1f} pts** to **{pred_prob*100:.1f}%**, above the approval line ({tau*100:.0f}%).\n"
                 base_explanation += "These signals matched patterns I've seen in similar applications."
             else:
-                # DENIED: Show contributions clearly
+                # DENIED: Warm, conversational explanation with SHAP accuracy
                 # By design: only capital_loss can have negative SHAP; others are positive but not enough
-                base_explanation = "I know this isn't the result you wanted."
+                base_explanation = "I'm really sorry this wasn't the news you were hoping for. "
+                
                 if base_value is not None and pred_prob is not None:
-                    base_explanation += f" Starting from a typical profile of {base_value*100:.0f}%, your details added:\n\n"
+                    base_explanation += f"Think of your score like a tug-of-war, starting at {base_value*100:.0f}%. "
                 
                 # Separate positive and negative contributors
                 positive_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta > 0]
                 negative_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta < 0]
                 
-                # Show top positive contributors (they helped but weren't enough)
-                for feature, value, delta in positive_contribs[:4]:
-                    if 'capital_gain' in feature:
-                        base_explanation += f"• Capital gains ({fmt_money(value)}): **+{delta*100:.1f} pts**\n"
-                    elif 'age' in feature:
-                        base_explanation += f"• Age ({value}): **+{delta*100:.1f} pts**\n"
-                    elif 'hours' in feature:
-                        base_explanation += f"• Work hours ({value}/week): **+{delta*100:.1f} pts**\n"
-                    elif 'education' in feature:
-                        base_explanation += f"• Education ({value}): **+{delta*100:.1f} pts**\n"
-                    else:
-                        base_explanation += f"• {feature.replace('_', ' ').title()}: **+{delta*100:.1f} pts**\n"
-                
-                # Show negative contributors if any (typically only capital_loss)
-                if negative_contribs:
-                    base_explanation += "\n"
-                    for feature, value, delta in negative_contribs[:2]:
-                        if 'capital_loss' in feature:
-                            base_explanation += f"• Capital losses ({fmt_money(value)}): **{delta*100:.1f} pts**\n"
+                # Describe positive contributors warmly
+                if positive_contribs:
+                    # Strongest positive helper
+                    if len(positive_contribs) > 0:
+                        f, v, d = positive_contribs[0]
+                        if 'capital_gain' in f:
+                            if d * 100 > 20:
+                                base_explanation += f"Your capital gains of {fmt_money(v)} gave a strong pull in the right direction (about **+{d*100:.1f} pts**). "
+                            else:
+                                base_explanation += f"Your capital gains of {fmt_money(v)} helped (about **+{d*100:.1f} pts**). "
+                        elif 'capital_loss' in f:
+                            base_explanation += f"Having capital losses of {fmt_money(v)} added **+{d*100:.1f} pts**. "
+                        elif 'hours' in f:
+                            base_explanation += f"Working {v} hours/week added a good boost (about **+{d*100:.1f} pts**). "
+                        elif 'education' in f or 'education_num' in f:
+                            base_explanation += f"Your education level helped push things up (about **+{d*100:.1f} pts**). "
+                        elif 'age' in f:
+                            base_explanation += f"Your age ({v}) gave a solid push (about **+{d*100:.1f} pts**). "
+                        elif 'marital' in f.lower():
+                            base_explanation += f"Your marital status helped (about **+{d*100:.1f} pts**). "
                         else:
-                            base_explanation += f"• {feature.replace('_', ' ').title()}: **{delta*100:.1f} pts**\n"
+                            base_explanation += f"Another profile detail gave a lift (**+{d*100:.1f} pts**). "
+                    
+                    # Additional helpers (be specific)
+                    for f, v, d in positive_contribs[1:3]:
+                        if 'capital_gain' in f:
+                            base_explanation += f"Capital gains of {fmt_money(v)} added **+{d*100:.1f} pts**. "
+                        elif 'capital_loss' in f:
+                            base_explanation += f"Capital losses added **+{d*100:.1f} pts**. "
+                        elif 'hours' in f:
+                            base_explanation += f"Working {v} hours/week added about **+{d*100:.1f} pts**. "
+                        elif 'age' in f:
+                            base_explanation += f"Your age ({v}) contributed **+{d*100:.1f} pts**. "
+                        elif 'education' in f or 'education_num' in f:
+                            base_explanation += f"Education gave **+{d*100:.1f} pts**. "
+                        elif 'marital' in f.lower():
+                            base_explanation += f"Marital status added **+{d*100:.1f} pts**. "
+                        else:
+                            base_explanation += f"Another detail nudged things up (**+{d*100:.1f} pts**). "
+                
+                # Describe negative contributors (factors that pulled back)
+                if negative_contribs:
+                    base_explanation += "\n\nOn the other side, "
+                    for i, (f, v, d) in enumerate(negative_contribs[:2]):
+                        connector = "and " if i > 0 else ""
+                        if 'capital_loss' in f:
+                            base_explanation += f"{connector}capital losses of {fmt_money(v)} tugged the rope back (**{d*100:.1f} pts**). "
+                        elif 'age' in f:
+                            base_explanation += f"{connector}age pulled things back (**{d*100:.1f} pts**). "
+                        elif 'marital' in f.lower():
+                            base_explanation += f"{connector}marital status tugged back (**{d*100:.1f} pts**). "
+                        elif 'education' in f:
+                            base_explanation += f"{connector}education level pulled back (**{d*100:.1f} pts**). "
+                        else:
+                            base_explanation += f"{connector}another factor tugged the rope back (**{d*100:.1f} pts**). "
                 
                 # Summary with exact numbers
                 if pred_prob is not None:
-                    base_explanation += f"\nThat brings your score to **{pred_prob*100:.1f}%**, which is below our approval line ({tau*100:.0f}%).\n"
+                    base_explanation += f"\n\nWhen all those pushes and pulls settled, your score landed at **{pred_prob*100:.1f}%**, and our approval line is **{tau*100:.0f}%**"
                     if gap_to_threshold > 0:
-                        base_explanation += f"In short: most signals helped, but the total lift wasn't enough (short by **{gap_to_threshold*100:.1f} pts**)."
+                        base_explanation += f"—so we ended up about **{gap_to_threshold*100:.1f} pts short**. "
                     else:
-                        base_explanation += "In short: most signals helped, but the total lift wasn't enough."
+                        base_explanation += ". "
+                
+                base_explanation += "I know that's disappointing."
         else:
             # Low anthropomorphism: Professional, technical, direct
             base_explanation = "SHAP Analysis (Probability Space)\n\n"
@@ -373,9 +410,30 @@ def explain_with_shap(agent, question_id=None):
                 else:
                     base_explanation += f" → Not approved (below by {gap_to_threshold*100:.1f} pts)\n"
         
-        # Feature importance explanations are already human-crafted with proper reasoning
-        # NO LLM enhancement needed - it only makes them worse by adding fluff
-        explanation = base_explanation
+        # HIGH anthropomorphism: enhance with LLM for natural, conversational flow
+        # LOW anthropomorphism: keep technical format as-is
+        if config.show_anthropomorphic:
+            try:
+                from natural_conversation import enhance_response
+                context = {
+                    'explanation_type': 'feature_importance',
+                    'loan_approved': approved,
+                    'predicted_probability': pred_prob,
+                    'base_probability': base_value,
+                    'gap_to_threshold': gap_to_threshold
+                }
+                enhanced = enhance_response(base_explanation, context, "explanation")
+                # Use enhanced version if it's not empty and not too much longer
+                if enhanced and len(enhanced) > 50 and len(enhanced) < len(base_explanation) * 2:
+                    explanation = enhanced
+                else:
+                    explanation = base_explanation
+            except Exception as e:
+                print(f"LLM enhancement skipped: {e}")
+                explanation = base_explanation
+        else:
+            # LOW anthropomorphism: no LLM enhancement, keep technical precision
+            explanation = base_explanation
         
         result = {
             'type': 'shap',
