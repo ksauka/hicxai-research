@@ -832,8 +832,8 @@ def explain_with_dice(agent, target_class=None, features='all'):
             
             # Check capital gain
             current_capital_gain = current_instance.get('capital_gain', 0)
-            if current_capital_gain < 5000:
-                changes.append(f"Your capital gains (increasing from ${current_capital_gain} to $5,000 or more)")
+            if current_capital_gain < 7000:
+                changes.append(f"Your capital gains (increasing from ${current_capital_gain:,.2f} to $7,000 or more)")
             
             # Check age
             current_age = current_instance.get('age', 0)
@@ -870,17 +870,31 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 base_explanation += "\n🧪 **Curious to experiment?**\n"
                 base_explanation += "For further analysis on how you can change your situation, check out the **What-If Lab** on the left sidebar! You can test different scenarios and see how various changes would impact the decision. It's pretty eye-opening! ✨"
         else:
-            # Low anthropomorphism: Technical, concise
+            # Low anthropomorphism: Professional, structured, comprehensive
             if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
-                base_explanation = "Profile modifications with positive impact on approval probability:\n\n"
+                base_explanation = "**Counterfactual Analysis: Profile Modifications for Approval**\n\n"
+                base_explanation += "**Current Decision:** Application not approved\n\n"
+                base_explanation += "**Recommended Profile Modifications:**\n"
+                base_explanation += "The following changes have been identified as having positive impact on approval probability:\n\n"
                 for i, change in enumerate(changes[:5], 1):
                     base_explanation += f"{i}. {change}\n"
-                base_explanation += "\nAnalysis based on approved application patterns with similar baseline profiles."
+                base_explanation += "\n**Methodology:**\n"
+                base_explanation += "This analysis is based on comparative patterns observed in approved applications with similar baseline demographic and financial profiles. "
+                base_explanation += "The recommendations reflect statistically significant factors that differentiate approved from denied applications in the training dataset.\n\n"
+                base_explanation += "**Next Steps:**\n"
+                base_explanation += "For interactive scenario analysis, use the What-If Lab tool on the left sidebar to test how specific modifications would affect your application probability in real-time."
             else:
-                base_explanation = "Factors that could modify current decision:\n\n"
+                base_explanation = "**Counterfactual Analysis: Decision-Influencing Factors**\n\n"
+                base_explanation += "**Current Decision:** Application approved\n\n"
+                base_explanation += "**Key Contributing Factors:**\n"
+                base_explanation += "The following profile characteristics were instrumental in achieving approval:\n\n"
                 for i, change in enumerate(changes[:5], 1):
                     base_explanation += f"{i}. {change}\n"
-                base_explanation += "\nData-driven insights from comparative application analysis."
+                base_explanation += "\n**Analysis Method:**\n"
+                base_explanation += "This assessment identifies factors that distinguish your profile from similar cases with different outcomes. "
+                base_explanation += "The analysis is derived from comparative patterns across the training dataset.\n\n"
+                base_explanation += "**Further Exploration:**\n"
+                base_explanation += "The What-If Lab on the left sidebar provides interactive scenario testing to understand how variations in these factors would affect decision outcomes."
         
         # Enhance with LLM for natural language while preserving factual content
         try:
