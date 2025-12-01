@@ -522,24 +522,9 @@ def explain_with_shap(agent, question_id=None):
                 
                 base_explanation += "I know that's disappointing. 💙"
         else:
-            # Low anthropomorphism: Professional, technical, comprehensive
-            base_explanation = "**SHAP Feature Impact Analysis**\n\n"
-            
-            if not approved:
-                base_explanation += "**Decision:** Application not approved\n"
-                base_explanation += f"**Final Probability:** {pred_prob*100:.1f}% (Threshold: {tau*100:.1f}%)\n"
-                base_explanation += f"**Shortfall:** {gap_to_threshold*100:.1f} percentage points below threshold\n\n"
-            else:
-                base_explanation += "**Decision:** Application approved\n"
-                base_explanation += f"**Final Probability:** {pred_prob*100:.1f}% (Threshold: {tau*100:.1f}%)\n"
-                base_explanation += f"**Margin:** {abs(pred_prob - tau)*100:.1f} percentage points above threshold\n\n"
-            
-            if base_value is not None:
-                base_explanation += f"**Baseline probability:** {base_value*100:.1f}%\n"
-                base_explanation += "(Average approval rate for similar demographic profiles)\n\n"
-            
-            base_explanation += "**Feature Contributions:**\n"
-            base_explanation += "The following factors contributed to the probability adjustment from baseline:\n\n"
+            # Low anthropomorphism: Professional, technical, focused on feature analysis
+            base_explanation = "**Feature Contributions:**\n"
+            base_explanation += "The following factors contributed to the probability adjustment:\n\n"
             
             # Separate positive and negative contributions
             positive_contribs = [(f, v, d) for f, v, d in top_feature_list if d > 0]
@@ -880,9 +865,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
                     base_explanation += f"{i}. {change}\n"
                 base_explanation += "\n**Methodology:**\n"
                 base_explanation += "This analysis is based on comparative patterns observed in approved applications with similar baseline demographic and financial profiles. "
-                base_explanation += "The recommendations reflect statistically significant factors that differentiate approved from denied applications in the training dataset.\n\n"
-                base_explanation += "**Next Steps:**\n"
-                base_explanation += "For interactive scenario analysis, use the What-If Lab tool on the left sidebar to test how specific modifications would affect your application probability in real-time."
+                base_explanation += "The recommendations reflect statistically significant factors that differentiate approved from denied applications in the training dataset."
             else:
                 base_explanation = "**Counterfactual Analysis: Decision-Influencing Factors**\n\n"
                 base_explanation += "**Current Decision:** Application approved\n\n"
@@ -892,9 +875,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
                     base_explanation += f"{i}. {change}\n"
                 base_explanation += "\n**Analysis Method:**\n"
                 base_explanation += "This assessment identifies factors that distinguish your profile from similar cases with different outcomes. "
-                base_explanation += "The analysis is derived from comparative patterns across the training dataset.\n\n"
-                base_explanation += "**Further Exploration:**\n"
-                base_explanation += "The What-If Lab on the left sidebar provides interactive scenario testing to understand how variations in these factors would affect decision outcomes."
+                base_explanation += "The analysis is derived from comparative patterns across the training dataset."
         
         # Enhance with LLM for natural language while preserving factual content
         try:
