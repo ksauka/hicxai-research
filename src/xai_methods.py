@@ -9,6 +9,93 @@ from constraints import *
 # Mode selection: 'full' requires dtreeviz; 'lite' skips it (good for Streamlit)
 _MODE = os.getenv('HICXAI_MODE', 'lite').strip().lower()
 
+# User-friendly feature name mappings (for international users)
+FEATURE_DISPLAY_NAMES = {
+    # Workclass (employment type)
+    'workclass_Private': 'Private sector',
+    'workclass_Self-emp-not-inc': 'Self-employed',
+    'workclass_Self-emp-inc': 'Self-employed (business owner)',
+    'workclass_Federal-gov': 'Federal government',
+    'workclass_Local-gov': 'Local government',
+    'workclass_State-gov': 'State government',
+    'workclass_Without-pay': 'Unpaid work',
+    'workclass_Never-worked': 'Never worked',
+    
+    # Education
+    'education_Preschool': 'Preschool',
+    'education_1st-4th': 'Elementary (1-4 years)',
+    'education_5th-6th': 'Elementary (5-6 years)',
+    'education_7th-8th': 'Middle school (7-8 years)',
+    'education_9th': 'High school (9th year)',
+    'education_10th': 'High school (10th year)',
+    'education_11th': 'High school (11th year)',
+    'education_12th': 'High school (12th year)',
+    'education_HS-grad': 'High school graduate',
+    'education_Some-college': 'Some college',
+    'education_Assoc-voc': 'Vocational degree',
+    'education_Assoc-acdm': 'Associate degree',
+    'education_Bachelors': 'Bachelor\'s degree',
+    'education_Masters': 'Master\'s degree',
+    'education_Prof-school': 'Professional degree',
+    'education_Doctorate': 'Doctorate',
+    'education_num': 'Education level',
+    
+    # Marital status
+    'marital_status_Married-civ-spouse': 'Married',
+    'marital_status_Married-spouse-absent': 'Married (separated)',
+    'marital_status_Married-AF-spouse': 'Married (military)',
+    'marital_status_Never-married': 'Never married',
+    'marital_status_Divorced': 'Divorced',
+    'marital_status_Separated': 'Separated',
+    'marital_status_Widowed': 'Widowed',
+    
+    # Occupation
+    'occupation_Tech-support': 'Technical support',
+    'occupation_Craft-repair': 'Skilled trades',
+    'occupation_Other-service': 'Service worker',
+    'occupation_Sales': 'Sales',
+    'occupation_Exec-managerial': 'Executive/Manager',
+    'occupation_Prof-specialty': 'Professional',
+    'occupation_Handlers-cleaners': 'Handler/Cleaner',
+    'occupation_Machine-op-inspct': 'Machine operator',
+    'occupation_Adm-clerical': 'Administrative',
+    'occupation_Farming-fishing': 'Farming/Fishing',
+    'occupation_Transport-moving': 'Transportation',
+    'occupation_Priv-house-serv': 'Household service',
+    'occupation_Protective-serv': 'Protective services',
+    'occupation_Armed-Forces': 'Military',
+    
+    # Relationship
+    'relationship_Husband': 'Husband',
+    'relationship_Wife': 'Wife',
+    'relationship_Own-child': 'Child',
+    'relationship_Not-in-family': 'Not in family',
+    'relationship_Other-relative': 'Other relative',
+    'relationship_Unmarried': 'Unmarried partner',
+    
+    # Race/Ethnicity
+    'race_White': 'White',
+    'race_Black': 'Black',
+    'race_Asian-Pac-Islander': 'Asian/Pacific Islander',
+    'race_Amer-Indian-Eskimo': 'Indigenous American',
+    'race_Other': 'Other',
+    
+    # Sex
+    'sex_Male': 'Male',
+    'sex_Female': 'Female',
+    
+    # Numerical features
+    'age': 'Age',
+    'fnlwgt': 'Census weight',
+    'capital_gain': 'Capital gains',
+    'capital_loss': 'Capital losses',
+    'hours_per_week': 'Work hours per week',
+}
+
+def get_friendly_feature_name(feature_name):
+    """Convert technical feature name to user-friendly display name"""
+    return FEATURE_DISPLAY_NAMES.get(feature_name, feature_name.replace('_', ' ').title())
+
 # Visualization deps
 try:
     import dtreeviz  # noqa: F401
@@ -294,17 +381,18 @@ def explain_with_shap(agent, question_id=None):
                 # Show top positive contributors
                 positive_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta > 0]
                 for feature, value, delta in positive_contribs[:4]:
+                    friendly_name = get_friendly_feature_name(feature)
                     if 'capital_gain' in feature:
-                        base_explanation += f"• Capital gains ({fmt_money(value)}): **+{delta*100:.1f} pts**\n"
+                        base_explanation += f"• {friendly_name} ({fmt_money(value)}): **+{delta*100:.1f} pts**\n"
                     elif 'age' in feature:
-                        base_explanation += f"• Age ({value}): **+{delta*100:.1f} pts**\n"
+                        base_explanation += f"• {friendly_name} ({value}): **+{delta*100:.1f} pts**\n"
                     elif 'hours' in feature:
-                        base_explanation += f"• Work hours ({value}/week): **+{delta*100:.1f} pts**\n"
+                        base_explanation += f"• {friendly_name} ({value}/week): **+{delta*100:.1f} pts**\n"
                     elif 'education' in feature:
-                        base_explanation += f"• Education ({value}): **+{delta*100:.1f} pts**\n"
+                        base_explanation += f"• {friendly_name}: **+{delta*100:.1f} pts**\n"
                     else:
                         # Generic format for other features
-                        base_explanation += f"• {feature.replace('_', ' ').title()}: **+{delta*100:.1f} pts**\n"
+                        base_explanation += f"• {friendly_name}: **+{delta*100:.1f} pts**\n"
                 
                 if pred_prob is not None and base_value is not None:
                     total_lift = (pred_prob - base_value) * 100
@@ -327,38 +415,40 @@ def explain_with_shap(agent, question_id=None):
                     # Strongest positive helper
                     if len(positive_contribs) > 0:
                         f, v, d = positive_contribs[0]
+                        friendly_name = get_friendly_feature_name(f)
                         if 'capital_gain' in f:
                             if d * 100 > 20:
-                                base_explanation += f"Your capital gains of {fmt_money(v)} gave a strong pull in the right direction (about **+{d*100:.1f} pts**). "
+                                base_explanation += f"Your {friendly_name.lower()} of {fmt_money(v)} gave a strong pull in the right direction (about **+{d*100:.1f} pts**). "
                             else:
-                                base_explanation += f"Your capital gains of {fmt_money(v)} helped (about **+{d*100:.1f} pts**). "
+                                base_explanation += f"Your {friendly_name.lower()} of {fmt_money(v)} helped (about **+{d*100:.1f} pts**). "
                         elif 'capital_loss' in f:
-                            base_explanation += f"Having capital losses of {fmt_money(v)} added **+{d*100:.1f} pts**. "
+                            base_explanation += f"Having {friendly_name.lower()} of {fmt_money(v)} added **+{d*100:.1f} pts**. "
                         elif 'hours' in f:
                             base_explanation += f"Working {v} hours/week added a good boost (about **+{d*100:.1f} pts**). "
                         elif 'education' in f or 'education_num' in f:
-                            base_explanation += f"Your education level helped push things up (about **+{d*100:.1f} pts**). "
+                            base_explanation += f"Your {friendly_name.lower()} helped push things up (about **+{d*100:.1f} pts**). "
                         elif 'age' in f:
                             base_explanation += f"Your age ({v}) gave a solid push (about **+{d*100:.1f} pts**). "
                         elif 'marital' in f.lower():
-                            base_explanation += f"Your marital status helped (about **+{d*100:.1f} pts**). "
+                            base_explanation += f"Being {friendly_name.lower()} helped (about **+{d*100:.1f} pts**). "
                         else:
-                            base_explanation += f"Another profile detail gave a lift (**+{d*100:.1f} pts**). "
+                            base_explanation += f"{friendly_name} gave a lift (**+{d*100:.1f} pts**). "
                     
                     # Additional helpers (be specific)
                     for f, v, d in positive_contribs[1:3]:
+                        friendly_name = get_friendly_feature_name(f)
                         if 'capital_gain' in f:
-                            base_explanation += f"Capital gains of {fmt_money(v)} added **+{d*100:.1f} pts**. "
+                            base_explanation += f"{friendly_name} of {fmt_money(v)} added **+{d*100:.1f} pts**. "
                         elif 'capital_loss' in f:
-                            base_explanation += f"Capital losses added **+{d*100:.1f} pts**. "
+                            base_explanation += f"{friendly_name} added **+{d*100:.1f} pts**. "
                         elif 'hours' in f:
                             base_explanation += f"Working {v} hours/week added about **+{d*100:.1f} pts**. "
                         elif 'age' in f:
                             base_explanation += f"Your age ({v}) contributed **+{d*100:.1f} pts**. "
                         elif 'education' in f or 'education_num' in f:
-                            base_explanation += f"Education gave **+{d*100:.1f} pts**. "
+                            base_explanation += f"{friendly_name} gave **+{d*100:.1f} pts**. "
                         elif 'marital' in f.lower():
-                            base_explanation += f"Marital status added **+{d*100:.1f} pts**. "
+                            base_explanation += f"Being {friendly_name.lower()} added **+{d*100:.1f} pts**. "
                         else:
                             base_explanation += f"Another detail nudged things up (**+{d*100:.1f} pts**). "
                 
@@ -366,17 +456,18 @@ def explain_with_shap(agent, question_id=None):
                 if negative_contribs:
                     base_explanation += "\n\nOn the other side, "
                     for i, (f, v, d) in enumerate(negative_contribs[:2]):
+                        friendly_name = get_friendly_feature_name(f)
                         connector = "and " if i > 0 else ""
                         if 'capital_loss' in f:
-                            base_explanation += f"{connector}capital losses of {fmt_money(v)} tugged the rope back (**{d*100:.1f} pts**). "
+                            base_explanation += f"{connector}{friendly_name.lower()} of {fmt_money(v)} tugged the rope back (**{d*100:.1f} pts**). "
                         elif 'age' in f:
                             base_explanation += f"{connector}age pulled things back (**{d*100:.1f} pts**). "
                         elif 'marital' in f.lower():
-                            base_explanation += f"{connector}marital status tugged back (**{d*100:.1f} pts**). "
+                            base_explanation += f"{connector}being {friendly_name.lower()} tugged back (**{d*100:.1f} pts**). "
                         elif 'education' in f:
-                            base_explanation += f"{connector}education level pulled back (**{d*100:.1f} pts**). "
+                            base_explanation += f"{connector}{friendly_name.lower()} pulled back (**{d*100:.1f} pts**). "
                         else:
-                            base_explanation += f"{connector}another factor tugged the rope back (**{d*100:.1f} pts**). "
+                            base_explanation += f"{connector}{friendly_name.lower()} tugged the rope back (**{d*100:.1f} pts**). "
                 
                 # Summary with exact numbers
                 if pred_prob is not None:
@@ -399,8 +490,8 @@ def explain_with_shap(agent, question_id=None):
             # Show top contributors with their values
             for feature, value, delta in top_feature_list[:6]:
                 sign = "+" if delta >= 0 else ""
-                feature_display = feature.replace('_', ' ')
-                base_explanation += f"• {feature_display}: {sign}{delta*100:.1f} pts\n"
+                friendly_name = get_friendly_feature_name(feature)
+                base_explanation += f"• {friendly_name}: {sign}{delta*100:.1f} pts\n"
             
             if pred_prob is not None:
                 base_explanation += f"\nTotal: {pred_prob*100:.1f}% vs. threshold {tau*100:.1f}%"
