@@ -285,9 +285,9 @@ def explain_with_shap(agent, question_id=None):
         gap_to_threshold = max(0.0, tau - pred_prob) if pred_prob is not None else 0.0
         
         if config.show_anthropomorphic:
-            # High anthropomorphism: Warm, empathetic, human-like
+            # High anthropomorphism: Warm, empathetic, human-like with emojis
             if approved:
-                base_explanation = "Thanks for waiting — here's what helped your profile.\n\n"
+                base_explanation = "Thanks for waiting — here's what helped your profile. 🎉\n\n"
                 if base_value is not None:
                     base_explanation += f"Starting from a baseline of {base_value*100:.0f}%, your details added:\n"
                 
@@ -308,12 +308,12 @@ def explain_with_shap(agent, question_id=None):
                 
                 if pred_prob is not None and base_value is not None:
                     total_lift = (pred_prob - base_value) * 100
-                    base_explanation += f"\nThat lifted your score by **+{total_lift:.1f} pts** to **{pred_prob*100:.1f}%**, above the approval line ({tau*100:.0f}%).\n"
-                base_explanation += "These signals matched patterns I've seen in similar applications."
+                    base_explanation += f"\nThat lifted your score by **+{total_lift:.1f} pts** to **{pred_prob*100:.1f}%**, above the approval line ({tau*100:.0f}%). ✨\n"
+                base_explanation += "These signals matched patterns I've seen in similar applications. 👍"
             else:
                 # DENIED: Warm, conversational explanation with SHAP accuracy
                 # By design: only capital_loss can have negative SHAP; others are positive but not enough
-                base_explanation = "I'm really sorry this wasn't the news you were hoping for. "
+                base_explanation = "I'm really sorry this wasn't the news you were hoping for. 😔 "
                 
                 if base_value is not None and pred_prob is not None:
                     base_explanation += f"Think of your score like a tug-of-war, starting at {base_value*100:.0f}%. "
@@ -382,11 +382,11 @@ def explain_with_shap(agent, question_id=None):
                 if pred_prob is not None:
                     base_explanation += f"\n\nWhen all those pushes and pulls settled, your score landed at **{pred_prob*100:.1f}%**, and our approval line is **{tau*100:.0f}%**"
                     if gap_to_threshold > 0:
-                        base_explanation += f"—so we ended up about **{gap_to_threshold*100:.1f} pts short**. "
+                        base_explanation += f"—so we ended up about **{gap_to_threshold*100:.1f} pts short**. 📊 "
                     else:
                         base_explanation += ". "
                 
-                base_explanation += "I know that's disappointing."
+                base_explanation += "I know that's disappointing. 💙"
         else:
             # Low anthropomorphism: Professional, technical, direct
             base_explanation = "SHAP Analysis (Probability Space)\n\n"
@@ -414,6 +414,7 @@ def explain_with_shap(agent, question_id=None):
         # LOW anthropomorphism: keep technical format as-is
         if config.show_anthropomorphic:
             try:
+                print("🤖 DEBUG: Attempting LLM enhancement for HIGH anthropomorphism...")
                 from natural_conversation import enhance_response
                 context = {
                     'explanation_type': 'feature_importance',
@@ -422,16 +423,24 @@ def explain_with_shap(agent, question_id=None):
                     'base_probability': base_value,
                     'gap_to_threshold': gap_to_threshold
                 }
+                print(f"🤖 DEBUG: Base explanation length: {len(base_explanation)} chars")
                 enhanced = enhance_response(base_explanation, context, "explanation")
+                print(f"🤖 DEBUG: Enhanced explanation length: {len(enhanced) if enhanced else 0} chars")
+                
                 # Use enhanced version if it's not empty and not too much longer
                 if enhanced and len(enhanced) > 50 and len(enhanced) < len(base_explanation) * 2:
+                    print("✅ DEBUG: Using LLM-enhanced explanation")
                     explanation = enhanced
                 else:
+                    print(f"⚠️ DEBUG: LLM output rejected (empty={not enhanced}, length check failed)")
                     explanation = base_explanation
             except Exception as e:
-                print(f"LLM enhancement skipped: {e}")
+                print(f"❌ DEBUG: LLM enhancement failed: {e}")
+                import traceback
+                traceback.print_exc()
                 explanation = base_explanation
         else:
+            print("📊 DEBUG: LOW anthropomorphism - skipping LLM enhancement")
             # LOW anthropomorphism: no LLM enhancement, keep technical precision
             explanation = base_explanation
         
