@@ -877,6 +877,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
         
         # Enhance with LLM for natural language while preserving factual content
         try:
+            print(f"🤖 DEBUG (Counterfactual): Attempting LLM enhancement (anthropomorphic={config.show_anthropomorphic})...")
             from natural_conversation import enhance_response
             
             context = {
@@ -884,6 +885,8 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 'num_changes': len(changes),
                 'explanation_type': 'counterfactual'
             }
+            
+            print(f"🤖 DEBUG: Base explanation length: {len(base_explanation)} chars")
             
             # Use LLM to make it more natural while respecting anthropomorphism
             explanation = enhance_response(
@@ -893,12 +896,20 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 high_anthropomorphism=config.show_anthropomorphic
             )
             
+            print(f"🤖 DEBUG: Enhanced explanation length: {len(explanation) if explanation else 0} chars")
+            
             # If LLM fails or returns empty, use base explanation
             if not explanation or len(explanation.strip()) < 20:
+                print("⚠️ DEBUG: LLM output rejected (empty or too short) - using base explanation")
                 explanation = base_explanation
+            else:
+                print("✅ DEBUG: Using LLM-enhanced counterfactual explanation")
                 
         except Exception as e:
             # Fallback to base explanation if LLM fails
+            print(f"❌ DEBUG: LLM enhancement failed: {e}")
+            import traceback
+            traceback.print_exc()
             explanation = base_explanation
         
         # Ensure current_instance is a dict for return values

@@ -120,6 +120,10 @@ def _remove_letter_formatting(text: str) -> str:
     text = re.sub(r'\n\[Your [^\]]+\]\s*', '', text, flags=re.MULTILINE)
     text = re.sub(r'\n\[Client[^\]]*\]\s*', '', text, flags=re.MULTILINE)
     
+    # Remove unwanted document-style headers that LLM might add
+    text = re.sub(r'^Counterfactual Analysis:\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\n\*\*Current Decision:\*\*\s*Application (not )?approved\s*\n', '\n', text, flags=re.MULTILINE)
+    
     return text.strip()
 
 
@@ -132,6 +136,8 @@ def _build_system_prompt(high_anthropomorphism: bool = True) -> str:
             "Rewrite this explanation as if you're speaking naturally to a friend - warm, supportive, and genuinely human. "
             "Write like you're a real person explaining this, not a robot reading a script. Use natural, flowing language. "
             "Preserve ALL factual content, numbers, and data points exactly. "
+            "CRITICAL: Keep all dollar signs ($), commas in numbers, and 'to' with spaces (e.g., '$5,000.00 to $7,000'). "
+            "Do NOT remove formatting from monetary values or ranges. "
             "Use 1-2 emojis naturally where they fit. Sound like a real human having a conversation. "
             "Structure as actionable insights when appropriate. "
             "Use clear formatting with bullets or short paragraphs. "
@@ -145,11 +151,16 @@ def _build_system_prompt(high_anthropomorphism: bool = True) -> str:
             "Rewrite this explanation in clear, professional language - direct and informative. "
             "Write like a knowledgeable professional communicating important information. "
             "Preserve ALL factual content, numbers, and data points exactly. "
+            "CRITICAL: Keep all dollar signs ($), commas in numbers, and 'to' with spaces (e.g., '$5,000.00 to $7,000'). "
+            "Do NOT remove formatting from monetary values or ranges. "
             "Be direct, clear, and authoritative. No emojis. No casual language. "
             "CRITICAL: DO NOT format as a letter or memo. NO 'Dear', NO 'Subject:', NO salutations, "
             "NO closings like 'Sincerely', NO signature blocks, NO [Client's Name] placeholders. "
+            "DO NOT add document-style headers like 'Counterfactual Analysis:', 'Current Decision:', etc. "
+            "If the input already has a section header (like '**Profile Modifications for Approval**'), keep it as-is. "
             "Start directly with the content. End with the last informational sentence. "
             "Use technical precision and structured formatting (bullets, numbered lists). "
+            "Keep the original section structure - don't add new sections or reorganize. "
             "Never add meta-commentary - just provide the professional explanation directly. "
             "Do not fabricate data. Do not change any numeric values."
         )
