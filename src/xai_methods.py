@@ -30,25 +30,91 @@ def explain_with_shap(agent, question_id=None):
         predicted_class = getattr(agent, 'predicted_class', 'unknown')
         current_instance = agent.current_instance
         
-        # Get feature importance - use model's feature_importances_ (reliable and fast)
-        # This is the actual importance from the trained model, not mock data
-        feature_importance = {}
-        feature_names = agent.data['X_display'].columns.tolist()
+        # Get LOCAL SHAP values in probability space
+        # This shows how much each feature contributed to THIS user's prediction
+        # Note: agent.data['X_display'] contains RAW data; model was trained on PREPROCESSED data
+        # Get feature names from the trained model
+        if hasattr(agent.clf_display, 'feature_names_in_'):
+            feature_names = agent.clf_display.feature_names_in_.tolist()
+        else:
+            # Fallback: use raw feature names (will likely fail if model is trained on encoded data)
+            feature_names = agent.data['X_display'].columns.tolist()
+        
         shap_values_computed = None
         instance_df = None
+        shap_contributions = {}  # Feature -> contribution in probability space (percentage points)
+        base_value = None
+        pred_prob = None
         
-        # Primary approach: Use model's feature importances (always works, never hangs)
-        if hasattr(agent.clf_display, 'feature_importances_'):
-            importances = agent.clf_display.feature_importances_
-            
-            # Get all features with their importance
-            for idx, feature in enumerate(feature_names):
-                if importances[idx] > 0.001:  # Only significant features
-                    feature_importance[feature] = float(importances[idx])
-        
-        # Note: We don't compute SHAP values here to avoid hanging
-        # Visualizations will use feature_importances_ which are just as valid
-        # and show the model's actual learned importance for each feature
+        # Compute SHAP in probability space (FAST - no hanging with TreeExplainer)
+        try:
+            # Prepare instance data
+            # current_instance should already be preprocessed (with one-hot encoded columns)
+            if current_instance is not None:
+                if hasattr(current_instance, 'to_frame'):
+                    instance_df = current_instance.to_frame().T
+                elif hasattr(current_instance, 'to_dict'):
+                    instance_df = pd.DataFrame([current_instance.to_dict()])
+                elif isinstance(current_instance, dict):
+                    instance_df = pd.DataFrame([current_instance])
+                else:
+                    instance_df = pd.DataFrame([current_instance])
+                
+                # Ensure column order matches training data
+                # Add missing columns with 0 (for one-hot encoded features not present)
+                for col in feature_names:
+                    if col not in instance_df.columns:
+                        instance_df[col] = 0
+                instance_df = instance_df[feature_names]
+                
+                # Initialize TreeExplainer (returns probability space for RandomForest)
+                explainer = shap.TreeExplainer(agent.clf_display)
+                
+                # Compute local SHAP values for this instance
+                shap_values = explainer.shap_values(instance_df)
+                base_value_raw = explainer.expected_value
+                
+                # Get predicted probability
+                pred_prob = float(agent.clf_display.predict_proba(instance_df)[0, 1])
+                
+                # Extract SHAP contributions (percentage points) for positive class
+                # TreeExplainer returns probabilities directly for tree-based models
+                if isinstance(shap_values, list):
+                    # Binary classification: [negative_class_shap, positive_class_shap]
+                    shap_vals_array = shap_values[1][0]
+                    base_value = float(base_value_raw[1])
+                else:
+                    # Shape: (n_samples, n_features, n_classes) or (n_features, n_classes)
+                    if len(shap_values.shape) == 3:
+                        shap_vals_array = shap_values[0, :, 1]
+                        base_value = float(base_value_raw[1])
+                    else:
+                        shap_vals_array = shap_values[:, 1]
+                        base_value = float(base_value_raw[1])
+                
+                # Store contributions in dictionary
+                for idx, feature in enumerate(feature_names):
+                    shap_contributions[feature] = float(shap_vals_array[idx])
+                
+                shap_values_computed = shap_vals_array
+                
+                # Sanity check: contributions should sum approximately to prediction
+                approx_prob = base_value + sum(shap_contributions.values())
+                if abs(approx_prob - pred_prob) > 0.05:
+                    print(f"Warning: SHAP additivity check: {approx_prob:.3f} vs {pred_prob:.3f}")
+                
+        except Exception as e:
+            print(f"SHAP computation failed: {e}")
+            # Fallback to feature importances
+            if hasattr(agent.clf_display, 'feature_importances_'):
+                importances = agent.clf_display.feature_importances_
+                for idx, feature in enumerate(feature_names):
+                    if importances[idx] > 0.001:
+                        shap_contributions[feature] = float(importances[idx])
+            # Get prediction probability for fallback
+            if instance_df is not None:
+                pred_prob = float(agent.clf_display.predict_proba(instance_df)[0, 1])
+            base_value = 0.5  # Reasonable baseline
         
         # Build natural language explanation with actual user values
         feature_impacts = []
@@ -83,16 +149,16 @@ def explain_with_shap(agent, question_id=None):
                     return col.split(f"{feature_base}_", 1)[1] if "_" in col else None
             return None
         
-        # Check if we have any feature importance data
-        if not feature_importance:
+        # Check if we have any SHAP contribution data
+        if not shap_contributions:
             return {
                 'type': 'error',
-                'explanation': "Unable to compute feature importance. The model may not have sufficient data.",
-                'error': 'No feature importance values computed'
+                'explanation': "Unable to compute SHAP contributions. The model may not have sufficient data.",
+                'error': 'No SHAP values computed'
             }
         
-        # Sort by importance  
-        sorted_features = sorted(feature_importance.items(), key=lambda x: abs(x[1]), reverse=True)
+        # Sort by absolute contribution (most impactful features)
+        sorted_features = sorted(shap_contributions.items(), key=lambda x: abs(x[1]), reverse=True)
         
         # Prioritize capital_gain if user has significant gains (moves it to top of list)
         capital_gain_val = instance_dict.get('capital_gain', 0) if instance_dict else 0
@@ -214,94 +280,97 @@ def explain_with_shap(agent, question_id=None):
             if value is not None:
                 top_feature_list.append((feature, value, impact))
         
+        # Approval threshold
+        tau = 0.50
+        gap_to_threshold = max(0.0, tau - pred_prob) if pred_prob is not None else 0.0
+        
         if config.show_anthropomorphic:
             # High anthropomorphism: Warm, empathetic, human-like
             if approved:
-                base_explanation = "Thanks for waiting — here's what helped your profile.\n"
-                for feature, value, impact in top_feature_list[:4]:
+                base_explanation = "Thanks for waiting — here's what helped your profile.\n\n"
+                if base_value is not None:
+                    base_explanation += f"Starting from a baseline of {base_value*100:.0f}%, your details added:\n"
+                
+                # Show top positive contributors
+                positive_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta > 0]
+                for feature, value, delta in positive_contribs[:4]:
                     if 'capital_gain' in feature:
-                        base_explanation += f"• Capital gains: {fmt_money(value)} boosted confidence\n"
+                        base_explanation += f"• Capital gains ({fmt_money(value)}): **+{delta*100:.1f} pts**\n"
                     elif 'age' in feature:
-                        base_explanation += f"• Age: {value} aligned with strong repayment patterns\n"
+                        base_explanation += f"• Age ({value}): **+{delta*100:.1f} pts**\n"
                     elif 'hours' in feature:
-                        base_explanation += f"• Work hours: {value} hrs/week signaled steady income\n"
+                        base_explanation += f"• Work hours ({value}/week): **+{delta*100:.1f} pts**\n"
                     elif 'education' in feature:
-                        base_explanation += f"• Education: {value} matched positive patterns\n"
-                base_explanation += "\nThese signals matched patterns I've seen in similar applications."
+                        base_explanation += f"• Education ({value}): **+{delta*100:.1f} pts**\n"
+                    else:
+                        # Generic format for other features
+                        base_explanation += f"• {feature.replace('_', ' ').title()}: **+{delta*100:.1f} pts**\n"
+                
+                if pred_prob is not None:
+                    base_explanation += f"\nYour final score: **{pred_prob*100:.1f}%** (above the {tau*100:.0f}% approval line)\n"
+                base_explanation += "These signals matched patterns I've seen in similar applications."
             else:
-                # DENIED: Be specific about what limited approval
-                # Only capital_loss truly hurts; others just weren't strong enough
-                base_explanation = "I know this isn't the answer you hoped for. Here's what limited approval:\n"
+                # DENIED: Show contributions clearly
+                # By design: only capital_loss can have negative SHAP; others are positive but not enough
+                base_explanation = "I know this isn't the answer you hoped for.\n\n"
+                if base_value is not None:
+                    base_explanation += f"Starting from a baseline of {base_value*100:.0f}%, your details added:\n"
                 
-                # Check for capital_loss first (only truly negative factor)
-                has_capital_loss = False
-                for feature, value, impact in top_feature_list:
-                    if 'capital_loss' in feature and value > 0:
-                        base_explanation += f"• Capital losses of {fmt_money(value)} worked against you\n"
-                        has_capital_loss = True
-                        break
+                # Separate positive and negative contributors
+                positive_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta > 0]
+                negative_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta < 0]
                 
-                # Other factors: be specific about why they weren't strong enough
-                count = 0
-                for feature, value, impact in top_feature_list:
-                    if 'capital_loss' in feature:
-                        continue  # Already handled
-                    if count >= 3:
-                        break
-                    
+                # Show top positive contributors first
+                for feature, value, delta in positive_contribs[:3]:
                     if 'capital_gain' in feature:
-                        if value == 0:
-                            base_explanation += f"• No capital gains — having investment income above $5,000 typically helps approval\n"
-                        elif value < 5000:
-                            base_explanation += f"• Capital gains of {fmt_money(value)} were below the typical approval threshold ($5,000+)\n"
-                        else:
-                            base_explanation += f"• Capital gains of {fmt_money(value)} were positive but not the deciding factor\n"
-                    elif 'hours' in feature:
-                        if value < 35:
-                            base_explanation += f"• Working {value} hrs/week — most approvals work 40+ hours\n"
-                        elif value < 40:
-                            base_explanation += f"• Working {value} hrs/week — just below the 40-hour benchmark\n"
-                        else:
-                            base_explanation += f"• Working {value} hrs/week was solid\n"
-                    elif 'education' in feature:
-                        if value in ['HS-grad', 'Some-college', '11th', '10th', '9th']:
-                            base_explanation += f"• Education level ({value}) — Bachelors or higher significantly increases approval odds\n"
-                        else:
-                            base_explanation += f"• Education level ({value}) was considered\n"
+                        base_explanation += f"• Capital gains ({fmt_money(value)}): **+{delta*100:.1f} pts**\n"
                     elif 'age' in feature:
-                        if value < 25:
-                            base_explanation += f"• Age {value} — approval rates increase with age and work history\n"
-                        elif value > 60:
-                            base_explanation += f"• Age {value} — closer to retirement can affect income stability assessment\n"
-                        else:
-                            base_explanation += f"• Age {value} was in a typical range\n"
-                    count += 1
+                        base_explanation += f"• Age ({value}): **+{delta*100:.1f} pts**\n"
+                    elif 'hours' in feature:
+                        base_explanation += f"• Work hours ({value}/week): **+{delta*100:.1f} pts**\n"
+                    elif 'education' in feature:
+                        base_explanation += f"• Education ({value}): **+{delta*100:.1f} pts**\n"
+                    else:
+                        base_explanation += f"• {feature.replace('_', ' ').title()}: **+{delta*100:.1f} pts**\n"
                 
-                base_explanation += "\nThe combination of these factors led to the denial."
+                # Show negative contributors (typically only capital_loss)
+                for feature, value, delta in negative_contribs[:2]:
+                    if 'capital_loss' in feature:
+                        base_explanation += f"• Capital losses ({fmt_money(value)}): **{delta*100:.1f} pts**\n"
+                    else:
+                        base_explanation += f"• {feature.replace('_', ' ').title()}: **{delta*100:.1f} pts**\n"
+                
+                if pred_prob is not None:
+                    base_explanation += f"\nYour final score: **{pred_prob*100:.1f}%** (below the {tau*100:.0f}% approval line"
+                    if gap_to_threshold > 0:
+                        base_explanation += f" by **{gap_to_threshold*100:.1f} pts**"
+                    base_explanation += ")\n"
+                base_explanation += "Most signals helped, but the total lift wasn't enough."
         else:
             # Low anthropomorphism: Professional, technical, direct
-            base_explanation = "Top factors influencing the score:\n\n"
-            if approved:
-                base_explanation += "Positive influence:\n"
-                if cg and cg > 0:
-                    base_explanation += f"• capital_gain: {fmt_money(cg)} (+)\n"
-                if age:
-                    base_explanation += f"• age: {age} (+)\n"
-                if hrs:
-                    base_explanation += f"• hours_per_week: {hrs} (+)\n"
-                if cl is not None and cl == 0:
-                    base_explanation += f"• capital_loss: {fmt_money(cl)} (neutral)\n"
-            else:
-                base_explanation += "Negative influence:\n"
-                if cg is not None and cg == 0:
-                    base_explanation += f"• capital_gain: {fmt_money(cg)} (−)\n"
-                if hrs and hrs < 40:
-                    base_explanation += f"• hours_per_week: {hrs} (−)\n"
-                if edu:
-                    base_explanation += f"• education: {edu} (−)\n"
-                if cl and cl > 0:
-                    base_explanation += f"• capital_loss: {fmt_money(cl)} (−)\n"
-            base_explanation += "\nAnalysis based on model feature importance calculations."
+            base_explanation = "SHAP Analysis (Probability Space)\n\n"
+            
+            if base_value is not None:
+                base_explanation += f"Baseline probability: {base_value*100:.1f}%\n"
+            
+            base_explanation += "\nContributions (percentage-point changes):\n"
+            
+            # Show top contributors with their values
+            for feature, value, delta in top_feature_list[:6]:
+                sign = "+" if delta >= 0 else ""
+                feature_display = feature.replace('_', ' ')
+                base_explanation += f"• {feature_display}: {sign}{delta*100:.1f} pts\n"
+            
+            if pred_prob is not None:
+                base_explanation += f"\nPredicted probability: {pred_prob*100:.1f}%\n"
+                base_explanation += f"Decision threshold: {tau*100:.1f}%\n"
+                
+                if approved:
+                    base_explanation += f"Result: APPROVED (above threshold by {(pred_prob - tau)*100:.1f} pts)\n"
+                else:
+                    base_explanation += f"Result: DENIED (below threshold by {gap_to_threshold*100:.1f} pts)\n"
+            
+            base_explanation += "\nAnalysis based on local SHAP contributions in probability space."
         
         # Feature importance explanations are already human-crafted with proper reasoning
         # NO LLM enhancement needed - it only makes them worse by adding fluff
@@ -312,8 +381,12 @@ def explain_with_shap(agent, question_id=None):
             'explanation': explanation,
             'feature_impacts': feature_impacts,
             'prediction_class': predicted_class,
-            'method': 'feature_importance_analysis',
-            'raw_importances': feature_importance
+            'method': 'local_shap_probability_space',
+            'shap_contributions': shap_contributions,
+            'base_value': base_value,
+            'predicted_probability': pred_prob,
+            'threshold': tau,
+            'gap_to_threshold': gap_to_threshold
         }
         
         # Include SHAP values if they were successfully computed (needed for visualizations)
