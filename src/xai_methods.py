@@ -561,12 +561,25 @@ def explain_with_shap(agent, question_id=None):
                 enhanced = enhance_response(base_explanation, context, "explanation")
                 print(f"🤖 DEBUG: Enhanced explanation length: {len(enhanced) if enhanced else 0} chars")
                 
-                # Use enhanced version if it's not empty and not too much longer
-                if enhanced and len(enhanced) > 50 and len(enhanced) < len(base_explanation) * 2:
+                # Detect if response was cut off (incomplete sentence)
+                is_complete = True
+                if enhanced:
+                    # Check if ends with proper punctuation or is clearly incomplete
+                    last_chars = enhanced.strip()[-20:] if len(enhanced) > 20 else enhanced.strip()
+                    if not any(enhanced.strip().endswith(p) for p in ['.', '!', '✨', '👍', '💙', '📊']):
+                        if 'brought it' in last_chars or 'pulled back' in last_chars or 'your education' in last_chars:
+                            print("⚠️ DEBUG: Detected incomplete sentence (cut off mid-explanation)")
+                            is_complete = False
+                
+                # Use enhanced version if complete, not empty, and reasonable length
+                if enhanced and is_complete and len(enhanced) > 50 and len(enhanced) < len(base_explanation) * 2:
                     print("✅ DEBUG: Using LLM-enhanced explanation")
                     explanation = enhanced
                 else:
-                    print(f"⚠️ DEBUG: LLM output rejected (empty={not enhanced}, length check failed)")
+                    if not is_complete:
+                        print(f"⚠️ DEBUG: LLM output incomplete - using base explanation")
+                    else:
+                        print(f"⚠️ DEBUG: LLM output rejected (empty={not enhanced}, length check failed)")
                     explanation = base_explanation
             except Exception as e:
                 print(f"❌ DEBUG: LLM enhancement failed: {e}")
@@ -797,21 +810,25 @@ def explain_with_dice(agent, target_class=None, features='all'):
         
         # Generate base explanation with language differentiation
         if config.show_anthropomorphic:
-            # High anthropomorphism: Warm, conversational
+            # High anthropomorphism: Warm, conversational, well-formatted (like Condition 6)
             if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
-                base_explanation = "What could help your application?\n\n"
-                base_explanation += "Based on similar successful applications, here are changes that might improve your chances:\n\n"
+                base_explanation = "💡 **What could help your application?**\n\n"
+                base_explanation += "I've looked at similar profiles that got approved, and here are changes that could really make a difference:\n\n"
                 for i, change in enumerate(changes[:5], 1):
-                    base_explanation += f"{i}. {change}\n"
-                base_explanation += "\nThese suggestions are based on patterns we've seen in approved applications."
-                base_explanation += "\nWant to explore more? Try the What-If Lab in the sidebar to see how different changes would affect your application in real-time!"
+                    base_explanation += f"**{i}.** {change}\n"
+                base_explanation += "\n✨ **Why these suggestions?**\n"
+                base_explanation += "These factors came up again and again in successful applications from people with similar starting points. They're not guarantees, but they represent real patterns in how decisions tend to go.\n"
+                base_explanation += "\n🧪 **Want to explore more?**\n"
+                base_explanation += "For further analysis on how you can change your situation, use the **What-If Lab** provided on the left sidebar! You can adjust these factors in real-time and see exactly how they'd affect your application probability. It's a great way to plan your next steps. 👍"
             else:
-                base_explanation = "What might change the outcome?\n\n"
-                base_explanation += "If circumstances were different, here are factors that could affect the decision:\n\n"
+                base_explanation = "🔄 **What might change the outcome?**\n\n"
+                base_explanation += "Your application was approved, but it's interesting to think about what factors made the difference. Here's what could have affected the decision:\n\n"
                 for i, change in enumerate(changes[:5], 1):
-                    base_explanation += f"{i}. {change}\n"
-                base_explanation += "\nThese insights come from analyzing similar application patterns."
-                base_explanation += "\nWant to explore more? Try the What-If Lab in the sidebar to test different scenarios!"
+                    base_explanation += f"**{i}.** {change}\n"
+                base_explanation += "\n💭 **Understanding the patterns:**\n"
+                base_explanation += "These insights come from analyzing thousands of similar applications. Each factor plays a role in how the overall assessment shakes out.\n"
+                base_explanation += "\n🧪 **Curious to experiment?**\n"
+                base_explanation += "For further analysis on how you can change your situation, check out the **What-If Lab** on the left sidebar! You can test different scenarios and see how various changes would impact the decision. It's pretty eye-opening! ✨"
         else:
             # Low anthropomorphism: Technical, concise
             if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):

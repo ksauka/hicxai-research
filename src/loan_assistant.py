@@ -576,7 +576,11 @@ class LoanAssistant:
 
             # XAI methods already enhance with LLM - no need to enhance again
             # Double enhancement causes wrapper text and duplicate content
-            return f"**Explanation:**\n\n{formatted_explanation}"
+            # For LOW anthropomorphism, return explanation without header (already has its own structure)
+            if not self.config.show_anthropomorphic:
+                return formatted_explanation
+            else:
+                return f"**Explanation:**\n\n{formatted_explanation}"
             
         except Exception as e:
             return ("I'm sorry, I couldn't generate that explanation right now. "
