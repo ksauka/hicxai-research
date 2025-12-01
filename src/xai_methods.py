@@ -857,8 +857,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
         else:
             # Low anthropomorphism: Professional, structured, comprehensive
             if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
-                base_explanation = "**Counterfactual Analysis: Profile Modifications for Approval**\n\n"
-                base_explanation += "**Current Decision:** Application not approved\n\n"
+                base_explanation = "**Profile Modifications for Approval**\n\n"
                 base_explanation += "**Recommended Profile Modifications:**\n"
                 base_explanation += "The following changes have been identified as having positive impact on approval probability:\n\n"
                 for i, change in enumerate(changes[:5], 1):
@@ -867,8 +866,7 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 base_explanation += "This analysis is based on comparative patterns observed in approved applications with similar baseline demographic and financial profiles. "
                 base_explanation += "The recommendations reflect statistically significant factors that differentiate approved from denied applications in the training dataset."
             else:
-                base_explanation = "**Counterfactual Analysis: Decision-Influencing Factors**\n\n"
-                base_explanation += "**Current Decision:** Application approved\n\n"
+                base_explanation = "**Decision-Influencing Factors**\n\n"
                 base_explanation += "**Key Contributing Factors:**\n"
                 base_explanation += "The following profile characteristics were instrumental in achieving approval:\n\n"
                 for i, change in enumerate(changes[:5], 1):
