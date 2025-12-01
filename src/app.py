@@ -144,6 +144,7 @@ from loan_assistant import LoanAssistant
 from ab_config import config
 from shap_visualizer import display_shap_explanation, explain_shap_visualizations
 from data_logger import init_logger
+from xai_methods import get_friendly_feature_name
 import os
 import pandas as pd
 
@@ -607,27 +608,33 @@ if current_field and current_field in field_options:
         cols = st.columns(cols_per_row)
         for j, option in enumerate(options[i:i+cols_per_row]):
             with cols[j]:
+                # Get friendly name for display
+                friendly_option = get_friendly_feature_name(f"{current_field}_{option}")
+                # If no mapping found, clean up the technical name
+                if friendly_option.startswith(current_field.title()):
+                    friendly_option = option.replace('-', ' ').replace('_', ' ')
+                
                 # Enhanced button styling based on option type
                 if option == "Other":
-                    button_text = f"🔄 {option}"
+                    button_text = f"🔄 {friendly_option}"
                     button_type = "primary"
                 elif option == "?":
                     button_text = f"❓ Unknown/Prefer not to say"
                     button_type = "primary"
                 elif option in ["Male", "Female"]:
-                    button_text = f"👤 {option}"
+                    button_text = f"👤 {friendly_option}"
                     button_type = "secondary"
                 elif option == "United-States":
-                    button_text = f"🇺🇸 {option}"
+                    button_text = f"🇺🇸 {friendly_option}"
                     button_type = "primary"
                 elif option in ["Private", "Self-emp-not-inc", "Self-emp-inc"]:
-                    button_text = f"💼 {option}"
+                    button_text = f"💼 {friendly_option}"
                     button_type = "secondary"
                 elif "gov" in option.lower():
-                    button_text = f"🏛️ {option}"
+                    button_text = f"🏛️ {friendly_option}"
                     button_type = "secondary"
                 else:
-                    button_text = f"✨ {option}"
+                    button_text = f"✨ {friendly_option}"
                     button_type = "secondary"
                 
                 if st.button(button_text, key=f"option_top_{current_field}_{option}", use_container_width=True, type=button_type):

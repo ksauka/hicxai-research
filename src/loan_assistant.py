@@ -12,7 +12,7 @@ from ab_config import config
 import pandas as pd
 import numpy as np
 import difflib
-from xai_methods import get_friendly_feature_name
+from xai_methods import get_friendly_feature_name, FEATURE_DISPLAY_NAMES
 
 # Import natural conversation enhancer
 try:
