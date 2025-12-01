@@ -973,7 +973,7 @@ with st.expander("📊 Dataset Information - Adult Census Income Dataset"):
     - **Sex**: Gender (Male, Female)
     - **Capital-gain / Capital-loss**: Investment gains or losses
     - **Hours-per-week**: Number of working hours per week
-    - **Native-country**: Country of origin
+    - **Native-country**: Country of origin (42 countries including United States, Canada, Mexico, Philippines, India, China, Germany, England, and many others)
     - **Income**: Target label (≤50K or >50K)
     
     **Model Performance:**

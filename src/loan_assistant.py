@@ -739,6 +739,40 @@ class LoanAssistant:
             for opt in allowed:
                 if val_norm.lower() == opt.lower():
                     return {'valid': True, 'message': '', 'normalized': opt}
+            
+            # Special handling for native_country: accept friendly names
+            if field == 'native_country':
+                # Map friendly country names to technical codes
+                country_mapping = {
+                    'united states': 'United-States',
+                    'usa': 'United-States',
+                    'us': 'United-States',
+                    'colombia': 'Columbia',  # Fix spelling
+                    'netherlands': 'Holand-Netherlands',
+                    'holland': 'Holand-Netherlands',
+                    'hong kong': 'Hong',
+                    'south korea': 'South',
+                    'korea': 'South',
+                    'trinidad': 'Trinadad&Tobago',
+                    'trinidad and tobago': 'Trinadad&Tobago',
+                    'el salvador': 'El-Salvador',
+                    'salvador': 'El-Salvador',
+                    'dominican republic': 'Dominican-Republic',
+                    'puerto rico': 'Puerto-Rico',
+                    'us territory': 'Outlying-US(Guam-USVI-etc)',
+                    'guam': 'Outlying-US(Guam-USVI-etc)',
+                    'virgin islands': 'Outlying-US(Guam-USVI-etc)',
+                    'former yugoslavia': 'Yugoslavia',
+                }
+                
+                val_lower = val_norm.lower()
+                if val_lower in country_mapping:
+                    return {'valid': True, 'message': '', 'normalized': country_mapping[val_lower]}
+                
+                # Try partial match for countries
+                for friendly, technical in country_mapping.items():
+                    if friendly in val_lower or val_lower in friendly:
+                        return {'valid': True, 'message': '', 'normalized': technical}
             # Special handling for generic 'other'
             if val_norm.lower() in ['other', 'others', 'something else', 'none of the above']:
                 if field == 'race' and 'Other' in allowed:
@@ -1186,7 +1220,7 @@ class LoanAssistant:
             'marital_status': "**Marital Status (7 categories):**\n• Married\n• Never married\n• Divorced, Separated, Widowed\n• Married but spouse absent\n• Married to armed forces spouse",
             'occupation': "**Occupation (15 categories):**\n• Professional, Management, Tech support\n• Sales, Craft/repair, Administrative\n• Service, Farming/fishing\n• Handlers/cleaners, Machine operators\n• Transportation, Protective services\n• Private household service, Armed Forces\n• '?' if unknown",
             'race': "**Race/Ethnicity (5 categories):**\n• White, Black\n• Asian-Pacific Islander\n• Indigenous American\n• Other ✅",
-            'native_country': "**Native Country (42 countries!):**\n• United States (most common)\n• All major countries supported\n• Use clickable buttons or type country name\n• '?' if unknown",
+            'native_country': "**Native Country (42 countries!):**\n• United States, Canada, Mexico\n• England, Scotland, Germany, France, Italy, Greece, Ireland, Portugal, Poland, Hungary, Netherlands\n• Philippines, India, China, Japan, Taiwan, Thailand, Vietnam, Cambodia, Laos, Hong Kong, South Korea\n• Jamaica, Haiti, Cuba, Puerto Rico, Dominican Republic, Trinidad & Tobago, Guatemala, Honduras, El Salvador, Nicaragua, Ecuador, Peru, Colombia\n• Iran, Former Yugoslavia\n• Use clickable buttons or type country name\n• '?' if unknown",
             'relationship': "**Household Relationship (6 categories):**\n• Husband, Wife\n• Own-child\n• Not in family\n• Other relative\n• Unmarried"
         }
         
