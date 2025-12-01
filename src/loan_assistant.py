@@ -12,6 +12,7 @@ from ab_config import config
 import pandas as pd
 import numpy as np
 import difflib
+from xai_methods import get_friendly_feature_name
 
 # Import natural conversation enhancer
 try:
@@ -121,15 +122,15 @@ class LoanAssistant:
         
         self.field_prompts = {
             'age': "What's your age?",
-            'workclass': "What's your employment type? (e.g., Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked)",
-            'education': "What's your highest education level? (e.g., Bachelors, HS-grad, 11th, Masters, 9th, Some-college, Assoc-acdm, Assoc-voc, 7th-8th, Doctorate, Prof-school, 5th-6th, 10th, 1st-4th, Preschool, 12th)",
-            'marital_status': "What's your marital status? (e.g., Married-civ-spouse, Divorced, Never-married, Separated, Widowed, Married-spouse-absent, Married-AF-spouse)",
-            'occupation': "What's your occupation? (e.g., Tech-support, Craft-repair, Other-service, Sales, Exec-managerial, Prof-specialty, Handlers-cleaners, Machine-op-inspct, Adm-clerical, Farming-fishing, Transport-moving, Priv-house-serv, Protective-serv, Armed-Forces)",
+            'workclass': "What's your employment type? (e.g., Private sector, Self-employed, Federal/Local/State government, etc.)",
+            'education': "What's your highest education level? (e.g., Bachelor's, High school graduate, Master's, Some college, Associate's degree, Doctorate, etc.)",
+            'marital_status': "What's your marital status? (e.g., Married, Divorced, Never married, Separated, Widowed, etc.)",
+            'occupation': "What's your occupation? (e.g., Tech support, Sales, Professional, Management, Administrative, Farming, etc.)",
             'hours_per_week': "How many hours per week do you work?",
             'sex': "What's your gender? (Male/Female)",
-            'race': "What's your race? (e.g., White, Asian-Pac-Islander, Amer-Indian-Eskimo, Other, Black)",
-            'native_country': "What's your native country? (e.g., United-States, Cambodia, England, Puerto-Rico, Canada, Germany, etc.)",
-            'relationship': "What's your relationship status? (e.g., Wife, Own-child, Husband, Not-in-family, Other-relative, Unmarried)",
+            'race': "What's your race? (e.g., White, Asian-Pacific Islander, Indigenous American, Black, Other)",
+            'native_country': "What's your native country? (e.g., United States, Canada, England, Germany, etc.)",
+            'relationship': "What's your relationship status? (e.g., Wife, Own-child, Husband, Not in family, Other relative, Unmarried)",
             'capital_gain': "Enter your capital gains for this year. Range: -5000 (losses) to 9000. Enter 0 if none.",
             'capital_loss': "Do you have any capital losses this year? (Enter amount or 0 if none)"
         }
@@ -891,7 +892,15 @@ class LoanAssistant:
         for field in self.field_order:
             value = getattr(self.application, field)
             if value is not None:
-                summary += f"• {field.replace('_', ' ').title()}: {value}\n"
+                # Get friendly names for both field and value
+                friendly_field = get_friendly_feature_name(field).replace(field.replace('_', ' ').title(), field.replace('_', ' ').title())
+                # For categorical values, try to get friendly name
+                friendly_value = get_friendly_feature_name(f"{field}_{value}")
+                # If no mapping found, use original value
+                if friendly_value.startswith(field.title()) or friendly_value == f"{field}_{value}":
+                    friendly_value = value
+                
+                summary += f"• {field.replace('_', ' ').title()}: {friendly_value}\n"
         
         return summary
 
@@ -1094,17 +1103,17 @@ class LoanAssistant:
             # High anthropomorphism: Warm, friendly, understanding
             field_examples = {
                 'age': "I need a number for your age, please! 😊 For example: '25', '30', or '45'",
-                'workclass': "No worries! Please choose from: Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked, or '?' if you're not sure",
-                'education': "I'd love to know your education level! Try: 'HS-grad', 'Bachelors', 'Masters', 'Some-college', etc. Feel free to click the buttons below for all options! 📚",
+                'workclass': "No worries! Please choose from: Private sector, Self-employed, Federal/Local/State government, etc., or '?' if you're not sure",
+                'education': "I'd love to know your education level! Try: 'High school graduate', 'Bachelor's', 'Master's', 'Some college', etc. Feel free to click the buttons below for all options! 📚",
                 'sex': "Please let me know: 'Male' or 'Female' - these are the only categories in my dataset, I apologize for the limitation",
-                'marital_status': "I need your marital status! Please choose: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', or 'Married-AF-spouse'",
+                'marital_status': "I need your marital status! Please choose: 'Married', 'Never married', 'Divorced', 'Separated', 'Widowed', etc.",
                 'occupation': "Tell me about your job! Please pick from the available categories, or '?' if you're not sure. Click the buttons below for all options! 💼",
                 'hours_per_week': "How many hours do you work per week? Just give me a number like: '40', '35', or '50' ⏰",
                 'capital_gain': "I need the amount of capital gains, or just '0' if you don't have any. For example: '5000' or '0'",
                 'capital_loss': "Please tell me your capital losses, or '0' if none. For example: '2000' or '0'",
-                'race': "Please help me understand your race/ethnicity. Choose from: Black, Asian-Pac-Islander, Amer-Indian-Eskimo, White, or Other",
+                'race': "Please help me understand your race/ethnicity. Choose from: White, Asian-Pacific Islander, Indigenous American, Black, or Other",
                 'native_country': "Which country are you from? I support all 42 countries in my training data! 🌍 Click the buttons below or just type the country name.",
-                'relationship': "What's your household relationship? Please choose from: Husband, Wife, Own-child, Not-in-family, Other-relative, or Unmarried"
+                'relationship': "What's your household relationship? Please choose from: Husband, Wife, Own-child, Not in family, Other relative, or Unmarried"
             }
             
             base_msg = f"Oops! I didn't quite catch that - '{user_input}' doesn't seem right for {field.replace('_', ' ')}. 🤔"
@@ -1146,17 +1155,17 @@ class LoanAssistant:
             # Fallback: Hardcoded technical messages if LLM not available
             field_examples = {
                 'age': "I need a number for your age. For example: '25', '30', or '45'",
-                'workclass': "Please choose from: Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked, or '?' if unknown",
-                'education': "Please specify your education level like: 'HS-grad', 'Bachelors', 'Masters', 'Some-college', etc. Click the buttons below for all options!",
+                'workclass': "Please choose from: Private sector, Self-employed, Federal/Local/State government, etc., or '?' if unknown",
+                'education': "Please specify your education level like: 'High school graduate', 'Bachelor's', 'Master's', 'Some college', etc. Click the buttons below for all options!",
                 'sex': "Please specify 'Male' or 'Female' - these are the only categories in the dataset I was trained on",
-                'marital_status': "Please choose: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', or 'Married-AF-spouse'",
+                'marital_status': "Please choose: 'Married', 'Never married', 'Divorced', 'Separated', 'Widowed', etc.",
                 'occupation': "Please describe your job from the available categories, or '?' if uncertain. Click the buttons below for all options!",
                 'hours_per_week': "I need the number of hours you work per week. For example: '40', '35', or '50'",
                 'capital_gain': "Enter the amount of capital gains, or '0' if none. For example: '5000' or '0'",
                 'capital_loss': "Enter the amount of capital losses, or '0' if none. For example: '2000' or '0'",
-                'race': "Please choose from: Black, Asian-Pac-Islander, Amer-Indian-Eskimo, White, or Other",
+                'race': "Please choose from: White, Asian-Pacific Islander, Indigenous American, Black, or Other",
                 'native_country': "Please specify your country - I support all 42 countries in my training data! Click the buttons below or type the country name.",
-                'relationship': "Please choose from: Husband, Wife, Own-child, Not-in-family, Other-relative, or Unmarried"
+                'relationship': "Please choose from: Husband, Wife, Own-child, Not in family, Other relative, or Unmarried"
             }
             
             base_msg = f"I didn't quite understand '{user_input}' for {field.replace('_', ' ')}."
@@ -1171,14 +1180,14 @@ class LoanAssistant:
         """Provide detailed help for specific fields"""
         help_texts = {
             'age': "**Age Examples:**\n• Just enter a number: 25, 30, 45\n• Must be between 17-90 years old",
-            'workclass': "**Employment Type (9 categories):**\n• Private (most common)\n• Self-emp-not-inc, Self-emp-inc\n• Federal-gov, Local-gov, State-gov\n• Without-pay, Never-worked\n• '?' if unknown/missing",
-            'education': "**Education Level (16 categories):**\n• HS-grad, Bachelors, Masters, Doctorate\n• Some-college, Assoc-acdm, Assoc-voc\n• 1st-4th, 5th-6th, 7th-8th, 9th, 10th, 11th, 12th\n• Preschool, Prof-school",
+            'workclass': "**Employment Type (9 categories):**\n• Private sector (most common)\n• Self-employed\n• Federal/Local/State government\n• Without pay, Never worked\n• '?' if unknown/missing",
+            'education': "**Education Level (16 categories):**\n• High school graduate, Bachelor's, Master's, Doctorate\n• Some college, Associate's degree\n• 1st-4th grade, 5th-6th grade, 7th-8th grade\n• 9th, 10th, 11th, 12th grade\n• Preschool, Professional school",
             'sex': "**Gender (2 categories only):**\n• Male\n• Female\n\n⚠️ This dataset was created in 1994 and only includes these binary options. We acknowledge this limitation and are working toward more inclusive data.",
-            'marital_status': "**Marital Status (7 categories):**\n• Married-civ-spouse (civilian spouse)\n• Never-married\n• Divorced, Separated, Widowed\n• Married-spouse-absent\n• Married-AF-spouse (armed forces spouse)",
-            'occupation': "**Occupation (15 categories):**\n• Prof-specialty, Exec-managerial, Tech-support\n• Sales, Craft-repair, Adm-clerical\n• Other-service, Farming-fishing\n• Handlers-cleaners, Machine-op-inspct\n• Transport-moving, Protective-serv\n• Priv-house-serv, Armed-Forces\n• '?' if unknown",
-            'race': "**Race/Ethnicity (5 categories):**\n• White, Black\n• Asian-Pac-Islander\n• Amer-Indian-Eskimo\n• Other ✅",
-            'native_country': "**Native Country (42 countries!):**\n• United-States (most common)\n• All major countries supported\n• Use clickable buttons or type country name\n• '?' if unknown",
-            'relationship': "**Household Relationship (6 categories):**\n• Husband, Wife\n• Own-child\n• Not-in-family\n• Other-relative\n• Unmarried"
+            'marital_status': "**Marital Status (7 categories):**\n• Married\n• Never married\n• Divorced, Separated, Widowed\n• Married but spouse absent\n• Married to armed forces spouse",
+            'occupation': "**Occupation (15 categories):**\n• Professional, Management, Tech support\n• Sales, Craft/repair, Administrative\n• Service, Farming/fishing\n• Handlers/cleaners, Machine operators\n• Transportation, Protective services\n• Private household service, Armed Forces\n• '?' if unknown",
+            'race': "**Race/Ethnicity (5 categories):**\n• White, Black\n• Asian-Pacific Islander\n• Indigenous American\n• Other ✅",
+            'native_country': "**Native Country (42 countries!):**\n• United States (most common)\n• All major countries supported\n• Use clickable buttons or type country name\n• '?' if unknown",
+            'relationship': "**Household Relationship (6 categories):**\n• Husband, Wife\n• Own-child\n• Not in family\n• Other relative\n• Unmarried"
         }
         
         return help_texts.get(field, f"Please provide your {field.replace('_', ' ')} information.")

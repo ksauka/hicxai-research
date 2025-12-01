@@ -781,26 +781,32 @@ if current_state == 'collecting_info' and hasattr(st.session_state.loan_assistan
             for j, option in enumerate(options[i:i+cols_per_row]):
                 with cols[j]:
                     # Enhanced button styling based on option type
+                    # Get friendly name for display
+                    friendly_option = get_friendly_feature_name(f"{current_field}_{option}")
+                    # If no mapping found, use the option as-is
+                    if friendly_option.startswith(current_field.title()):
+                        friendly_option = option.replace('-', ' ').replace('_', ' ')
+                    
                     if option == "Other":
-                        button_text = f"🔄 {option}"
+                        button_text = f"🔄 {friendly_option}"
                         button_type = "primary"
                     elif option == "?":
                         button_text = f"❓ Unknown/Prefer not to say"
                         button_type = "primary"
                     elif option in ["Male", "Female"]:
-                        button_text = f"👤 {option}"
+                        button_text = f"👤 {friendly_option}"
                         button_type = "secondary"
                     elif option == "United-States":
-                        button_text = f"🇺🇸 {option}"
+                        button_text = f"🇺🇸 {friendly_option}"
                         button_type = "primary"
                     elif option in ["Private", "Self-emp-not-inc", "Self-emp-inc"]:
-                        button_text = f"💼 {option}"
+                        button_text = f"💼 {friendly_option}"
                         button_type = "secondary"
                     elif "gov" in option.lower():
-                        button_text = f"🏛️ {option}"
+                        button_text = f"🏛️ {friendly_option}"
                         button_type = "secondary"
                     else:
-                        button_text = f"✨ {option}"
+                        button_text = f"✨ {friendly_option}"
                         button_type = "secondary"
                     
                     if st.button(button_text, key=f"option_{current_field}_{option}", use_container_width=True, type=button_type):
@@ -951,12 +957,12 @@ with st.expander("📊 Dataset Information - Adult Census Income Dataset"):
     The dataset contains both qualitative and numerical attributes:
     
     - **Age**: Numerical value indicating person's age
-    - **Workclass**: Type of employment (Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked)
-    - **Education / Education-num**: Highest education level (both textual and numerical representation)
-    - **Marital-status**: Marital status (Married-civ-spouse, Divorced, Never-married, Separated, Widowed, etc.)
-    - **Occupation**: Work area (Tech-support, Craft-repair, Other-service, Sales, Exec-managerial, Prof-specialty, etc.)
+    - **Workclass**: Type of employment (Private sector, Self-employed, Federal/Local/State government, etc.)
+    - **Education / Education-num**: Highest education level (High school graduate, Bachelor's, Master's, Doctorate, etc.)
+    - **Marital-status**: Marital status (Married, Divorced, Never married, Separated, Widowed, etc.)
+    - **Occupation**: Work area (Professional, Sales, Administrative, Tech support, Management, etc.)
     - **Relationship**: Family role (Husband, Wife, Own-child, Not-in-family, Other-relative, Unmarried)
-    - **Race**: Ethnic background (White, Asian-Pac-Islander, Amer-Indian-Eskimo, Other, Black)
+    - **Race**: Ethnic background (White, Asian-Pacific Islander, Indigenous American, Black, Other)
     - **Sex**: Gender (Male, Female)
     - **Capital-gain / Capital-loss**: Investment gains or losses
     - **Hours-per-week**: Number of working hours per week
