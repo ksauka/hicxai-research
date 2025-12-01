@@ -306,22 +306,23 @@ def explain_with_shap(agent, question_id=None):
                         # Generic format for other features
                         base_explanation += f"• {feature.replace('_', ' ').title()}: **+{delta*100:.1f} pts**\n"
                 
-                if pred_prob is not None:
-                    base_explanation += f"\nYour final score: **{pred_prob*100:.1f}%** (above the {tau*100:.0f}% approval line)\n"
+                if pred_prob is not None and base_value is not None:
+                    total_lift = (pred_prob - base_value) * 100
+                    base_explanation += f"\nThat lifted your score by **+{total_lift:.1f} pts** to **{pred_prob*100:.1f}%**, above the approval line ({tau*100:.0f}%).\n"
                 base_explanation += "These signals matched patterns I've seen in similar applications."
             else:
                 # DENIED: Show contributions clearly
                 # By design: only capital_loss can have negative SHAP; others are positive but not enough
-                base_explanation = "I know this isn't the answer you hoped for.\n\n"
-                if base_value is not None:
-                    base_explanation += f"Starting from a baseline of {base_value*100:.0f}%, your details added:\n"
+                base_explanation = "I know this isn't the result you wanted."
+                if base_value is not None and pred_prob is not None:
+                    base_explanation += f" Starting from a typical profile of {base_value*100:.0f}%, your details added:\n\n"
                 
                 # Separate positive and negative contributors
                 positive_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta > 0]
                 negative_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta < 0]
                 
-                # Show top positive contributors first
-                for feature, value, delta in positive_contribs[:3]:
+                # Show top positive contributors (they helped but weren't enough)
+                for feature, value, delta in positive_contribs[:4]:
                     if 'capital_gain' in feature:
                         base_explanation += f"• Capital gains ({fmt_money(value)}): **+{delta*100:.1f} pts**\n"
                     elif 'age' in feature:
@@ -333,19 +334,22 @@ def explain_with_shap(agent, question_id=None):
                     else:
                         base_explanation += f"• {feature.replace('_', ' ').title()}: **+{delta*100:.1f} pts**\n"
                 
-                # Show negative contributors (typically only capital_loss)
-                for feature, value, delta in negative_contribs[:2]:
-                    if 'capital_loss' in feature:
-                        base_explanation += f"• Capital losses ({fmt_money(value)}): **{delta*100:.1f} pts**\n"
-                    else:
-                        base_explanation += f"• {feature.replace('_', ' ').title()}: **{delta*100:.1f} pts**\n"
+                # Show negative contributors if any (typically only capital_loss)
+                if negative_contribs:
+                    base_explanation += "\n"
+                    for feature, value, delta in negative_contribs[:2]:
+                        if 'capital_loss' in feature:
+                            base_explanation += f"• Capital losses ({fmt_money(value)}): **{delta*100:.1f} pts**\n"
+                        else:
+                            base_explanation += f"• {feature.replace('_', ' ').title()}: **{delta*100:.1f} pts**\n"
                 
+                # Summary with exact numbers
                 if pred_prob is not None:
-                    base_explanation += f"\nYour final score: **{pred_prob*100:.1f}%** (below the {tau*100:.0f}% approval line"
+                    base_explanation += f"\nThat brings your score to **{pred_prob*100:.1f}%**, which is below our approval line ({tau*100:.0f}%).\n"
                     if gap_to_threshold > 0:
-                        base_explanation += f" by **{gap_to_threshold*100:.1f} pts**"
-                    base_explanation += ")\n"
-                base_explanation += "Most signals helped, but the total lift wasn't enough."
+                        base_explanation += f"In short: most signals helped, but the total lift wasn't enough (short by **{gap_to_threshold*100:.1f} pts**)."
+                    else:
+                        base_explanation += "In short: most signals helped, but the total lift wasn't enough."
         else:
             # Low anthropomorphism: Professional, technical, direct
             base_explanation = "SHAP Analysis (Probability Space)\n\n"
@@ -353,7 +357,7 @@ def explain_with_shap(agent, question_id=None):
             if base_value is not None:
                 base_explanation += f"Baseline probability: {base_value*100:.1f}%\n"
             
-            base_explanation += "\nContributions (percentage-point changes):\n"
+            base_explanation += "\nContributions (percentage-point changes from baseline):\n"
             
             # Show top contributors with their values
             for feature, value, delta in top_feature_list[:6]:
@@ -362,15 +366,12 @@ def explain_with_shap(agent, question_id=None):
                 base_explanation += f"• {feature_display}: {sign}{delta*100:.1f} pts\n"
             
             if pred_prob is not None:
-                base_explanation += f"\nPredicted probability: {pred_prob*100:.1f}%\n"
-                base_explanation += f"Decision threshold: {tau*100:.1f}%\n"
+                base_explanation += f"\nTotal: {pred_prob*100:.1f}% vs. threshold {tau*100:.1f}%"
                 
                 if approved:
-                    base_explanation += f"Result: APPROVED (above threshold by {(pred_prob - tau)*100:.1f} pts)\n"
+                    base_explanation += f" → Approved (above by {(pred_prob - tau)*100:.1f} pts)\n"
                 else:
-                    base_explanation += f"Result: DENIED (below threshold by {gap_to_threshold*100:.1f} pts)\n"
-            
-            base_explanation += "\nAnalysis based on local SHAP contributions in probability space."
+                    base_explanation += f" → Not approved (below by {gap_to_threshold*100:.1f} pts)\n"
         
         # Feature importance explanations are already human-crafted with proper reasoning
         # NO LLM enhancement needed - it only makes them worse by adding fluff
