@@ -522,73 +522,113 @@ def explain_with_shap(agent, question_id=None):
                 
                 base_explanation += "I know that's disappointing. 💙"
         else:
-            # Low anthropomorphism: Professional, technical, direct
-            base_explanation = "SHAP Analysis (Probability Space)\n\n"
+            # Low anthropomorphism: Professional, technical, comprehensive
+            base_explanation = "**SHAP Feature Impact Analysis**\n\n"
+            
+            if not approved:
+                base_explanation += "**Decision:** Application not approved\n"
+                base_explanation += f"**Final Probability:** {pred_prob*100:.1f}% (Threshold: {tau*100:.1f}%)\n"
+                base_explanation += f"**Shortfall:** {gap_to_threshold*100:.1f} percentage points below threshold\n\n"
+            else:
+                base_explanation += "**Decision:** Application approved\n"
+                base_explanation += f"**Final Probability:** {pred_prob*100:.1f}% (Threshold: {tau*100:.1f}%)\n"
+                base_explanation += f"**Margin:** {abs(pred_prob - tau)*100:.1f} percentage points above threshold\n\n"
             
             if base_value is not None:
-                base_explanation += f"Baseline probability: {base_value*100:.1f}%\n"
+                base_explanation += f"**Baseline probability:** {base_value*100:.1f}%\n"
+                base_explanation += "(Average approval rate for similar demographic profiles)\n\n"
             
-            base_explanation += "\nContributions (percentage-point changes from baseline):\n"
+            base_explanation += "**Feature Contributions:**\n"
+            base_explanation += "The following factors contributed to the probability adjustment from baseline:\n\n"
             
-            # Show top contributors with their values
-            for feature, value, delta in top_feature_list[:6]:
-                sign = "+" if delta >= 0 else ""
-                friendly_name = get_friendly_feature_name(feature)
-                base_explanation += f"• {friendly_name}: {sign}{delta*100:.1f} pts\n"
+            # Separate positive and negative contributions
+            positive_contribs = [(f, v, d) for f, v, d in top_feature_list if d > 0]
+            negative_contribs = [(f, v, d) for f, v, d in top_feature_list if d < 0]
             
-            if pred_prob is not None:
-                base_explanation += f"\nTotal: {pred_prob*100:.1f}% vs. threshold {tau*100:.1f}%"
-                
-                if approved:
-                    base_explanation += f" → Approved (above by {(pred_prob - tau)*100:.1f} pts)\n"
-                else:
-                    base_explanation += f" → Not approved (below by {gap_to_threshold*100:.1f} pts)\n"
+            if negative_contribs:
+                base_explanation += "*Negative Factors (decreased approval probability):*\n"
+                for feature, value, delta in negative_contribs[:5]:
+                    friendly_name = get_friendly_feature_name(feature)
+                    base_explanation += f"• **{friendly_name}:** {delta*100:.1f} pts"
+                    if 'capital' in feature.lower() or 'hours' in feature.lower() or 'age' in feature.lower():
+                        base_explanation += f" (value: {value})"
+                    base_explanation += "\n"
+                base_explanation += "\n"
+            
+            if positive_contribs:
+                base_explanation += "*Positive Factors (increased approval probability):*\n"
+                for feature, value, delta in positive_contribs[:5]:
+                    friendly_name = get_friendly_feature_name(feature)
+                    base_explanation += f"• **{friendly_name}:** +{delta*100:.1f} pts"
+                    if 'capital' in feature.lower() or 'hours' in feature.lower() or 'age' in feature.lower():
+                        base_explanation += f" (value: {value})"
+                    base_explanation += "\n"
+                base_explanation += "\n"
+            
+            base_explanation += "**Analysis Summary:**\n"
+            if not approved:
+                base_explanation += f"The model calculated a {pred_prob*100:.1f}% approval probability based on the profile characteristics. "
+                base_explanation += f"This falls {gap_to_threshold*100:.1f} percentage points below the {tau*100:.1f}% threshold required for approval. "
+                if negative_contribs:
+                    top_negative = get_friendly_feature_name(negative_contribs[0][0])
+                    base_explanation += f"The primary limiting factor was {top_negative} ({negative_contribs[0][2]*100:.1f} pts)."
+            else:
+                base_explanation += f"The model calculated a {pred_prob*100:.1f}% approval probability based on the profile characteristics. "
+                base_explanation += f"This exceeds the {tau*100:.1f}% threshold by {abs(pred_prob - tau)*100:.1f} percentage points. "
+                if positive_contribs:
+                    top_positive = get_friendly_feature_name(positive_contribs[0][0])
+                    base_explanation += f"The primary contributing factor was {top_positive} (+{positive_contribs[0][2]*100:.1f} pts)."
         
-        # HIGH anthropomorphism: enhance with LLM for natural, conversational flow
-        # LOW anthropomorphism: keep technical format as-is
-        if config.show_anthropomorphic:
-            try:
+        # BOTH anthropomorphism levels use LLM enhancement - just with different styles
+        try:
+            if config.show_anthropomorphic:
                 print("🤖 DEBUG: Attempting LLM enhancement for HIGH anthropomorphism...")
-                from natural_conversation import enhance_response
-                context = {
-                    'explanation_type': 'feature_importance',
-                    'loan_approved': approved,
-                    'predicted_probability': pred_prob,
-                    'base_probability': base_value,
-                    'gap_to_threshold': gap_to_threshold
-                }
-                print(f"🤖 DEBUG: Base explanation length: {len(base_explanation)} chars")
-                enhanced = enhance_response(base_explanation, context, "explanation")
-                print(f"🤖 DEBUG: Enhanced explanation length: {len(enhanced) if enhanced else 0} chars")
-                
-                # Detect if response was cut off (incomplete sentence)
-                is_complete = True
-                if enhanced:
-                    # Check if ends with proper punctuation or is clearly incomplete
-                    last_chars = enhanced.strip()[-20:] if len(enhanced) > 20 else enhanced.strip()
-                    if not any(enhanced.strip().endswith(p) for p in ['.', '!', '✨', '👍', '💙', '📊']):
-                        if 'brought it' in last_chars or 'pulled back' in last_chars or 'your education' in last_chars:
-                            print("⚠️ DEBUG: Detected incomplete sentence (cut off mid-explanation)")
-                            is_complete = False
-                
-                # Use enhanced version if complete, not empty, and reasonable length
-                if enhanced and is_complete and len(enhanced) > 50 and len(enhanced) < len(base_explanation) * 2:
-                    print("✅ DEBUG: Using LLM-enhanced explanation")
-                    explanation = enhanced
+            else:
+                print("🤖 DEBUG: Attempting LLM enhancement for LOW anthropomorphism...")
+            
+            from natural_conversation import enhance_response
+            context = {
+                'explanation_type': 'feature_importance',
+                'loan_approved': approved,
+                'predicted_probability': pred_prob,
+                'base_probability': base_value,
+                'gap_to_threshold': gap_to_threshold
+            }
+            print(f"🤖 DEBUG: Base explanation length: {len(base_explanation)} chars")
+            
+            # Pass anthropomorphism level to get appropriate style
+            enhanced = enhance_response(
+                base_explanation, 
+                context, 
+                "explanation",
+                high_anthropomorphism=config.show_anthropomorphic
+            )
+            print(f"🤖 DEBUG: Enhanced explanation length: {len(enhanced) if enhanced else 0} chars")
+            
+            # Detect if response was cut off (incomplete sentence)
+            is_complete = True
+            if enhanced:
+                # Check if ends with proper punctuation or is clearly incomplete
+                last_chars = enhanced.strip()[-20:] if len(enhanced) > 20 else enhanced.strip()
+                if not any(enhanced.strip().endswith(p) for p in ['.', '!', '✨', '👍', '💙', '📊', ')']):
+                    if 'brought it' in last_chars or 'pulled back' in last_chars or 'your education' in last_chars:
+                        print("⚠️ DEBUG: Detected incomplete sentence (cut off mid-explanation)")
+                        is_complete = False
+            
+            # Use enhanced version if complete, not empty, and reasonable length
+            if enhanced and is_complete and len(enhanced) > 50 and len(enhanced) < len(base_explanation) * 2:
+                print("✅ DEBUG: Using LLM-enhanced explanation")
+                explanation = enhanced
+            else:
+                if not is_complete:
+                    print(f"⚠️ DEBUG: LLM output incomplete - using base explanation")
                 else:
-                    if not is_complete:
-                        print(f"⚠️ DEBUG: LLM output incomplete - using base explanation")
-                    else:
-                        print(f"⚠️ DEBUG: LLM output rejected (empty={not enhanced}, length check failed)")
-                    explanation = base_explanation
-            except Exception as e:
-                print(f"❌ DEBUG: LLM enhancement failed: {e}")
-                import traceback
-                traceback.print_exc()
+                    print(f"⚠️ DEBUG: LLM output rejected (empty={not enhanced}, length check failed)")
                 explanation = base_explanation
-        else:
-            print("📊 DEBUG: LOW anthropomorphism - skipping LLM enhancement")
-            # LOW anthropomorphism: no LLM enhancement, keep technical precision
+        except Exception as e:
+            print(f"❌ DEBUG: LLM enhancement failed: {e}")
+            import traceback
+            traceback.print_exc()
             explanation = base_explanation
         
         result = {

@@ -103,6 +103,26 @@ def _get_openai_client():
         return None
 
 
+def _remove_letter_formatting(text: str) -> str:
+    """Remove letter/memo formatting elements from text (LOW anthropomorphism only)."""
+    import re
+    
+    # Remove subject lines
+    text = re.sub(r'^Subject:.*?\n\n?', '', text, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Remove salutations (Dear X, Hello X, etc.)
+    text = re.sub(r'^(Dear|Hello|Hi|Greetings)\s+\[?[^\]]*\]?\s*[,:]?\s*\n\n?', '', text, flags=re.IGNORECASE | re.MULTILINE)
+    
+    # Remove signature blocks (Sincerely, Best regards, etc.)
+    text = re.sub(r'\n\n?(Sincerely|Best regards?|Regards|Yours truly|Respectfully|Thank you)[,]?\s*\n.*?(\[.*?\].*?\n){0,3}.*$', '', text, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Remove placeholder blocks like [Your Name], [Your Position], [Contact Info]
+    text = re.sub(r'\n\[Your [^\]]+\]\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\n\[Client[^\]]*\]\s*', '', text, flags=re.MULTILINE)
+    
+    return text.strip()
+
+
 def _build_system_prompt(high_anthropomorphism: bool = True) -> str:
     """Build system prompt respecting anthropomorphism condition."""
     if high_anthropomorphism:
@@ -126,9 +146,10 @@ def _build_system_prompt(high_anthropomorphism: bool = True) -> str:
             "Write like a knowledgeable professional communicating important information. "
             "Preserve ALL factual content, numbers, and data points exactly. "
             "Be direct, clear, and authoritative. No emojis. No casual language. "
-            "DO NOT add letter formatting (no 'Dear', no 'Subject:', no salutations, no signatures). "
-            "Just provide the core explanation directly without any letter structure. "
-            "Use technical precision and structured formatting. "
+            "CRITICAL: DO NOT format as a letter or memo. NO 'Dear', NO 'Subject:', NO salutations, "
+            "NO closings like 'Sincerely', NO signature blocks, NO [Client's Name] placeholders. "
+            "Start directly with the content. End with the last informational sentence. "
+            "Use technical precision and structured formatting (bullets, numbered lists). "
             "Never add meta-commentary - just provide the professional explanation directly. "
             "Do not fabricate data. Do not change any numeric values."
         )
@@ -260,11 +281,16 @@ def enhance_response(response: str, context: Optional[Dict[str, Any]] = None, re
                     max_tokens=max_tokens,
                 )
                 content = completion.choices[0].message.content if completion and completion.choices else None
+                
+                # Post-process: Remove letter formatting if LOW anthropomorphism
+                if content and not high_anthropomorphism:
+                    content = _remove_letter_formatting(content)
+                
                 return content or response
             except Exception:
                 pass
 
-        # Fallback: legacy openai SDK
+        # Fallback: Older OpenAI SDK versions (pre-1.0)
         try:
             import openai  # type: ignore
             openai.api_key = os.environ.get("OPENAI_API_KEY")
@@ -286,6 +312,11 @@ def enhance_response(response: str, context: Optional[Dict[str, Any]] = None, re
                 max_tokens=max_tokens,
             )
             content = completion["choices"][0]["message"]["content"] if completion else None
+            
+            # Post-process: Remove letter formatting if LOW anthropomorphism
+            if content and not high_anthropomorphism:
+                content = _remove_letter_formatting(content)
+            
             return content or response
         except Exception:
             return response

@@ -8,7 +8,6 @@ from xai_methods import (
     explain_with_shap, explain_with_dice, explain_with_anchor,
     explain_with_shap_advanced, explain_with_dtreeviz
 )
-from utils import print_log
 from constraints import *
 
 class Answers:

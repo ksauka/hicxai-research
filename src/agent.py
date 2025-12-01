@@ -11,7 +11,6 @@ from constraints import *
 from nlu import NLU
 import json
 from answer import Answers
-from utils import print_log
 
 # Import natural conversation enhancer
 try:
