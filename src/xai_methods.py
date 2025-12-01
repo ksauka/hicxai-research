@@ -818,7 +818,12 @@ def explain_with_dice(agent, target_class=None, features='all'):
             # Check capital gain
             current_capital_gain = current_instance.get('capital_gain', 0)
             if current_capital_gain < 7000:
-                changes.append(f"Your capital gains (increasing from ${current_capital_gain:,.2f} to $7,000 or more)")
+                # Format as integer without commas to prevent LLM from corrupting the text
+                current_gain_int = int(current_capital_gain)
+                if current_gain_int == 0:
+                    changes.append("Your capital gains (increasing to $7000 or more)")
+                else:
+                    changes.append(f"Your capital gains (increasing from ${current_gain_int} to $7000 or more)")
             
             # Check age
             current_age = current_instance.get('age', 0)
