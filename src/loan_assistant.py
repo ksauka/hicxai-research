@@ -745,6 +745,7 @@ class LoanAssistant:
                     return {'valid': True, 'message': '', 'normalized': opt}
             
             # === COMPREHENSIVE FUZZY MATCHING FOR ALL CATEGORICAL FIELDS ===
+            print(f"🔍 DEBUG: Fuzzy matching for field='{field}', val_norm='{val_norm}'")
             
             # Workclass: Employment type mappings
             if field == 'workclass':
@@ -870,7 +871,9 @@ class LoanAssistant:
                 }
                 
                 val_lower = val_norm.lower()
+                print(f"🎓 DEBUG: Education check - val_lower='{val_lower}', in mapping: {val_lower in education_mapping}")
                 if val_lower in education_mapping:
+                    print(f"✅ DEBUG: Education match found: '{val_lower}' → '{education_mapping[val_lower]}'")
                     return {'valid': True, 'message': '', 'normalized': education_mapping[val_lower]}
             
             # Marital Status: Relationship status mappings
