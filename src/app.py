@@ -1019,7 +1019,7 @@ if os.getenv('HICXAI_DEBUG_MODE', 'false').lower() == 'true':
 if st.session_state.get("return_raw"):
     elapsed_time = time.time() - st.session_state.get("start_time", time.time())
     
-    if elapsed_time >= 90:  # 1.5 minutes = 90 seconds
+    if elapsed_time >= 60:  # 1 minute = 60 seconds
         st.markdown("---")
         col_a, col_b = st.columns([3, 1])
         with col_a:
@@ -1032,7 +1032,7 @@ if st.session_state.get("return_raw"):
     else:
         # Show countdown until button appears
         st.markdown("---")
-        wait_time = int(90 - elapsed_time)
+        wait_time = int(60 - elapsed_time)
         m, s = divmod(wait_time, 60)
         remaining_deadline = max(0, int(st.session_state.deadline_ts - time.time()))
         md, sd = divmod(remaining_deadline, 60)
