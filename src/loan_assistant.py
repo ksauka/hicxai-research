@@ -744,29 +744,388 @@ class LoanAssistant:
                 if val_norm.lower() == opt.lower():
                     return {'valid': True, 'message': '', 'normalized': opt}
             
-            # Special handling for native_country: accept friendly names
+            # === COMPREHENSIVE FUZZY MATCHING FOR ALL CATEGORICAL FIELDS ===
+            
+            # Workclass: Employment type mappings
+            if field == 'workclass':
+                workclass_mapping = {
+                    # Private sector variations
+                    'private': 'Private', 'private sector': 'Private', 'pvt': 'Private',
+                    'private company': 'Private', 'private employer': 'Private', 'pvt sector': 'Private',
+                    'corporate': 'Private', 'company': 'Private', 'business': 'Private',
+                    
+                    # Self-employed not incorporated
+                    'self employed': 'Self-emp-not-inc', 'self-employed': 'Self-emp-not-inc',
+                    'self emp': 'Self-emp-not-inc', 'self employed not incorporated': 'Self-emp-not-inc',
+                    'freelance': 'Self-emp-not-inc', 'freelancer': 'Self-emp-not-inc',
+                    'independent': 'Self-emp-not-inc', 'contractor': 'Self-emp-not-inc',
+                    'self': 'Self-emp-not-inc', 'own business': 'Self-emp-not-inc',
+                    
+                    # Self-employed incorporated
+                    'self employed incorporated': 'Self-emp-inc', 'self-employed inc': 'Self-emp-inc',
+                    'self emp inc': 'Self-emp-inc', 'incorporated': 'Self-emp-inc',
+                    'own company': 'Self-emp-inc', 'business owner': 'Self-emp-inc',
+                    
+                    # Federal government
+                    'federal': 'Federal-gov', 'federal government': 'Federal-gov',
+                    'fed gov': 'Federal-gov', 'federal govt': 'Federal-gov',
+                    'fed': 'Federal-gov', 'us government': 'Federal-gov',
+                    'national government': 'Federal-gov',
+                    
+                    # Local government
+                    'local': 'Local-gov', 'local government': 'Local-gov',
+                    'local gov': 'Local-gov', 'local govt': 'Local-gov',
+                    'city': 'Local-gov', 'municipal': 'Local-gov',
+                    'county': 'Local-gov', 'city government': 'Local-gov',
+                    
+                    # State government
+                    'state': 'State-gov', 'state government': 'State-gov',
+                    'state gov': 'State-gov', 'state govt': 'State-gov',
+                    
+                    # Government (general - default to Federal)
+                    'government': 'Federal-gov', 'govt': 'Federal-gov', 'gov': 'Federal-gov',
+                    'public sector': 'Federal-gov', 'public': 'Federal-gov',
+                    
+                    # Other
+                    'without pay': 'Without-pay', 'unpaid': 'Without-pay', 'volunteer': 'Without-pay',
+                    'never worked': 'Never-worked', 'never': 'Never-worked', 'unemployed': 'Never-worked',
+                    'unknown': '?', 'not sure': '?', 'prefer not to say': '?',
+                }
+                
+                val_lower = val_norm.lower()
+                if val_lower in workclass_mapping:
+                    return {'valid': True, 'message': '', 'normalized': workclass_mapping[val_lower]}
+            
+            # Education: Education level mappings
+            if field == 'education':
+                education_mapping = {
+                    # Doctorate variations
+                    'phd': 'Doctorate', 'doctorate': 'Doctorate', 'doctoral': 'Doctorate',
+                    'ph.d': 'Doctorate', 'ph.d.': 'Doctorate', 'doctor': 'Doctorate',
+                    'doctoral degree': 'Doctorate',
+                    
+                    # Professional school
+                    'professional': 'Prof-school', 'prof school': 'Prof-school',
+                    'professional school': 'Prof-school', 'professional degree': 'Prof-school',
+                    'law school': 'Prof-school', 'medical school': 'Prof-school',
+                    'mba': 'Prof-school', 'jd': 'Prof-school', 'md': 'Prof-school',
+                    
+                    # Masters variations
+                    'masters': 'Masters', 'master': 'Masters', "master's": 'Masters',
+                    'masters degree': 'Masters', 'graduate degree': 'Masters',
+                    'ms': 'Masters', 'm.s.': 'Masters', 'ma': 'Masters', 'm.a.': 'Masters',
+                    'msc': 'Masters', 'grad school': 'Masters',
+                    
+                    # Bachelors variations
+                    'bachelors': 'Bachelors', 'bachelor': 'Bachelors', "bachelor's": 'Bachelors',
+                    'bachelors degree': 'Bachelors', 'undergraduate': 'Bachelors',
+                    'college degree': 'Bachelors', 'university degree': 'Bachelors',
+                    'bs': 'Bachelors', 'b.s.': 'Bachelors', 'ba': 'Bachelors', 'b.a.': 'Bachelors',
+                    '4 year degree': 'Bachelors', 'four year degree': 'Bachelors',
+                    
+                    # Associates vocational
+                    'associate vocational': 'Assoc-voc', 'assoc voc': 'Assoc-voc',
+                    'associates voc': 'Assoc-voc', 'vocational': 'Assoc-voc',
+                    'trade school': 'Assoc-voc', 'technical school': 'Assoc-voc',
+                    
+                    # Associates academic
+                    'associate': 'Assoc-acdm', 'associates': 'Assoc-acdm',
+                    'associate degree': 'Assoc-acdm', 'associates degree': 'Assoc-acdm',
+                    'assoc': 'Assoc-acdm', 'aa': 'Assoc-acdm', 'as': 'Assoc-acdm',
+                    '2 year degree': 'Assoc-acdm', 'two year degree': 'Assoc-acdm',
+                    'community college': 'Assoc-acdm',
+                    
+                    # Some college
+                    'some college': 'Some-college', 'college': 'Some-college',
+                    'some university': 'Some-college', 'incomplete college': 'Some-college',
+                    'partial college': 'Some-college', 'attended college': 'Some-college',
+                    
+                    # High school graduate
+                    'high school': 'HS-grad', 'hs grad': 'HS-grad', 'hs-grad': 'HS-grad',
+                    'high school graduate': 'HS-grad', 'high school diploma': 'HS-grad',
+                    'hs diploma': 'HS-grad', 'diploma': 'HS-grad', 'graduated high school': 'HS-grad',
+                    'secondary school': 'HS-grad', 'secondary': 'HS-grad',
+                    
+                    # 12th grade
+                    '12th': '12th', '12th grade': '12th', 'grade 12': '12th',
+                    'twelfth grade': '12th', 'senior year': '12th',
+                    
+                    # 11th grade
+                    '11th': '11th', '11th grade': '11th', 'grade 11': '11th',
+                    'eleventh grade': '11th', 'junior year': '11th',
+                    
+                    # 10th grade
+                    '10th': '10th', '10th grade': '10th', 'grade 10': '10th',
+                    'tenth grade': '10th', 'sophomore year': '10th',
+                    
+                    # 9th grade
+                    '9th': '9th', '9th grade': '9th', 'grade 9': '9th',
+                    'ninth grade': '9th', 'freshman year': '9th',
+                    
+                    # Elementary grades
+                    '7th-8th': '7th-8th', '7th 8th': '7th-8th', 'middle school': '7th-8th',
+                    '5th-6th': '5th-6th', '5th 6th': '5th-6th', 'elementary': '5th-6th',
+                    '1st-4th': '1st-4th', '1st 4th': '1st-4th', 'primary school': '1st-4th',
+                    'preschool': 'Preschool', 'pre school': 'Preschool', 'kindergarten': 'Preschool',
+                }
+                
+                val_lower = val_norm.lower()
+                if val_lower in education_mapping:
+                    return {'valid': True, 'message': '', 'normalized': education_mapping[val_lower]}
+            
+            # Marital Status: Relationship status mappings
+            if field == 'marital_status':
+                marital_mapping = {
+                    # Married civilian spouse
+                    'married': 'Married-civ-spouse', 'married civilian': 'Married-civ-spouse',
+                    'married civ spouse': 'Married-civ-spouse', 'spouse': 'Married-civ-spouse',
+                    'wed': 'Married-civ-spouse', 'wedded': 'Married-civ-spouse',
+                    
+                    # Divorced
+                    'divorced': 'Divorced', 'divorce': 'Divorced', 'div': 'Divorced',
+                    'ex spouse': 'Divorced', 'former spouse': 'Divorced',
+                    
+                    # Never married
+                    'never married': 'Never-married', 'single': 'Never-married',
+                    'unmarried': 'Never-married', 'never wed': 'Never-married',
+                    'not married': 'Never-married', 'bachelor': 'Never-married',
+                    'bachelorette': 'Never-married',
+                    
+                    # Separated
+                    'separated': 'Separated', 'sep': 'Separated', 'legal separation': 'Separated',
+                    'legally separated': 'Separated',
+                    
+                    # Widowed
+                    'widowed': 'Widowed', 'widow': 'Widowed', 'widower': 'Widowed',
+                    
+                    # Married spouse absent
+                    'married spouse absent': 'Married-spouse-absent',
+                    'spouse absent': 'Married-spouse-absent', 'separated married': 'Married-spouse-absent',
+                    
+                    # Married armed forces spouse
+                    'married af spouse': 'Married-AF-spouse', 'military spouse': 'Married-AF-spouse',
+                    'armed forces spouse': 'Married-AF-spouse', 'military': 'Married-AF-spouse',
+                }
+                
+                val_lower = val_norm.lower()
+                if val_lower in marital_mapping:
+                    return {'valid': True, 'message': '', 'normalized': marital_mapping[val_lower]}
+            
+            # Occupation: Job type mappings
+            if field == 'occupation':
+                occupation_mapping = {
+                    # Tech support
+                    'tech support': 'Tech-support', 'tech': 'Tech-support', 'it': 'Tech-support',
+                    'technical support': 'Tech-support', 'help desk': 'Tech-support',
+                    'it support': 'Tech-support', 'computer support': 'Tech-support',
+                    'technology': 'Tech-support',
+                    
+                    # Craft repair
+                    'craft': 'Craft-repair', 'repair': 'Craft-repair', 'craft repair': 'Craft-repair',
+                    'mechanic': 'Craft-repair', 'electrician': 'Craft-repair',
+                    'plumber': 'Craft-repair', 'carpenter': 'Craft-repair',
+                    'technician': 'Craft-repair', 'maintenance': 'Craft-repair',
+                    
+                    # Other service
+                    'service': 'Other-service', 'other service': 'Other-service',
+                    'customer service': 'Other-service', 'hospitality': 'Other-service',
+                    'waiter': 'Other-service', 'waitress': 'Other-service',
+                    'server': 'Other-service', 'food service': 'Other-service',
+                    
+                    # Sales
+                    'sales': 'Sales', 'sale': 'Sales', 'salesperson': 'Sales',
+                    'retail': 'Sales', 'cashier': 'Sales', 'sales rep': 'Sales',
+                    'sales representative': 'Sales', 'seller': 'Sales',
+                    
+                    # Executive managerial
+                    'manager': 'Exec-managerial', 'management': 'Exec-managerial',
+                    'executive': 'Exec-managerial', 'exec': 'Exec-managerial',
+                    'managerial': 'Exec-managerial', 'supervisor': 'Exec-managerial',
+                    'director': 'Exec-managerial', 'ceo': 'Exec-managerial',
+                    'president': 'Exec-managerial', 'vp': 'Exec-managerial',
+                    'vice president': 'Exec-managerial', 'administrator': 'Exec-managerial',
+                    'boss': 'Exec-managerial', 'leader': 'Exec-managerial',
+                    
+                    # Professional specialty
+                    'professional': 'Prof-specialty', 'prof specialty': 'Prof-specialty',
+                    'specialist': 'Prof-specialty', 'professional specialty': 'Prof-specialty',
+                    'engineer': 'Prof-specialty', 'doctor': 'Prof-specialty',
+                    'lawyer': 'Prof-specialty', 'accountant': 'Prof-specialty',
+                    'scientist': 'Prof-specialty', 'researcher': 'Prof-specialty',
+                    'teacher': 'Prof-specialty', 'professor': 'Prof-specialty',
+                    'architect': 'Prof-specialty', 'analyst': 'Prof-specialty',
+                    
+                    # Handlers cleaners
+                    'handler': 'Handlers-cleaners', 'cleaner': 'Handlers-cleaners',
+                    'handlers cleaners': 'Handlers-cleaners', 'janitor': 'Handlers-cleaners',
+                    'custodian': 'Handlers-cleaners', 'cleaning': 'Handlers-cleaners',
+                    
+                    # Machine operator inspector
+                    'machine operator': 'Machine-op-inspct', 'operator': 'Machine-op-inspct',
+                    'inspector': 'Machine-op-inspct', 'machine op': 'Machine-op-inspct',
+                    'factory worker': 'Machine-op-inspct', 'assembly': 'Machine-op-inspct',
+                    
+                    # Administrative clerical
+                    'admin': 'Adm-clerical', 'administrative': 'Adm-clerical',
+                    'clerical': 'Adm-clerical', 'adm clerical': 'Adm-clerical',
+                    'office': 'Adm-clerical', 'secretary': 'Adm-clerical',
+                    'receptionist': 'Adm-clerical', 'clerk': 'Adm-clerical',
+                    'office worker': 'Adm-clerical', 'assistant': 'Adm-clerical',
+                    
+                    # Farming fishing
+                    'farming': 'Farming-fishing', 'fishing': 'Farming-fishing',
+                    'farmer': 'Farming-fishing', 'agriculture': 'Farming-fishing',
+                    'agricultural': 'Farming-fishing', 'farm': 'Farming-fishing',
+                    'fisherman': 'Farming-fishing',
+                    
+                    # Transport moving
+                    'transport': 'Transport-moving', 'transportation': 'Transport-moving',
+                    'driver': 'Transport-moving', 'mover': 'Transport-moving',
+                    'truck driver': 'Transport-moving', 'delivery': 'Transport-moving',
+                    'courier': 'Transport-moving', 'logistics': 'Transport-moving',
+                    
+                    # Private house service
+                    'private house': 'Priv-house-serv', 'house service': 'Priv-house-serv',
+                    'domestic': 'Priv-house-serv', 'housekeeper': 'Priv-house-serv',
+                    'maid': 'Priv-house-serv', 'nanny': 'Priv-house-serv',
+                    
+                    # Protective service
+                    'protective': 'Protective-serv', 'protective service': 'Protective-serv',
+                    'police': 'Protective-serv', 'security': 'Protective-serv',
+                    'guard': 'Protective-serv', 'firefighter': 'Protective-serv',
+                    'officer': 'Protective-serv', 'cop': 'Protective-serv',
+                    
+                    # Armed forces
+                    'armed forces': 'Armed-Forces', 'military': 'Armed-Forces',
+                    'army': 'Armed-Forces', 'navy': 'Armed-Forces',
+                    'air force': 'Armed-Forces', 'marines': 'Armed-Forces',
+                    'soldier': 'Armed-Forces', 'service member': 'Armed-Forces',
+                    
+                    # Unknown
+                    'unknown': '?', 'not sure': '?', 'prefer not to say': '?',
+                }
+                
+                val_lower = val_norm.lower()
+                if val_lower in occupation_mapping:
+                    return {'valid': True, 'message': '', 'normalized': occupation_mapping[val_lower]}
+            
+            # Sex: Gender mappings
+            if field == 'sex':
+                sex_mapping = {
+                    # Male
+                    'male': 'Male', 'm': 'Male', 'man': 'Male', 'boy': 'Male',
+                    'guy': 'Male', 'gentleman': 'Male', 'he': 'Male',
+                    
+                    # Female
+                    'female': 'Female', 'f': 'Female', 'woman': 'Female',
+                    'girl': 'Female', 'lady': 'Female', 'she': 'Female',
+                }
+                
+                val_lower = val_norm.lower()
+                if val_lower in sex_mapping:
+                    return {'valid': True, 'message': '', 'normalized': sex_mapping[val_lower]}
+            
+            # Race: Ethnicity mappings
+            if field == 'race':
+                race_mapping = {
+                    # White
+                    'white': 'White', 'caucasian': 'White', 'european': 'White',
+                    
+                    # Black
+                    'black': 'Black', 'african american': 'Black', 'african': 'Black',
+                    'afro american': 'Black',
+                    
+                    # Asian Pacific Islander
+                    'asian': 'Asian-Pac-Islander', 'asian pacific islander': 'Asian-Pac-Islander',
+                    'asian pac islander': 'Asian-Pac-Islander', 'pacific islander': 'Asian-Pac-Islander',
+                    'filipino': 'Asian-Pac-Islander', 'chinese': 'Asian-Pac-Islander',
+                    'japanese': 'Asian-Pac-Islander', 'korean': 'Asian-Pac-Islander',
+                    'vietnamese': 'Asian-Pac-Islander', 'hawaiian': 'Asian-Pac-Islander',
+                    
+                    # American Indian Eskimo
+                    'american indian': 'Amer-Indian-Eskimo', 'native american': 'Amer-Indian-Eskimo',
+                    'indigenous': 'Amer-Indian-Eskimo', 'eskimo': 'Amer-Indian-Eskimo',
+                    'native': 'Amer-Indian-Eskimo', 'indian': 'Amer-Indian-Eskimo',
+                    
+                    # Other
+                    'other': 'Other', 'mixed': 'Other', 'multiracial': 'Other',
+                    'hispanic': 'Other', 'latino': 'Other', 'latina': 'Other',
+                }
+                
+                val_lower = val_norm.lower()
+                if val_lower in race_mapping:
+                    return {'valid': True, 'message': '', 'normalized': race_mapping[val_lower]}
+            
+            # Relationship: Family relationship mappings
+            if field == 'relationship':
+                relationship_mapping = {
+                    # Wife
+                    'wife': 'Wife', 'married woman': 'Wife', 'spouse female': 'Wife',
+                    
+                    # Husband
+                    'husband': 'Husband', 'married man': 'Husband', 'spouse male': 'Husband',
+                    
+                    # Own child
+                    'own child': 'Own-child', 'child': 'Own-child', 'son': 'Own-child',
+                    'daughter': 'Own-child', 'kid': 'Own-child', 'offspring': 'Own-child',
+                    
+                    # Not in family
+                    'not in family': 'Not-in-family', 'alone': 'Not-in-family',
+                    'independent': 'Not-in-family', 'single person': 'Not-in-family',
+                    'living alone': 'Not-in-family',
+                    
+                    # Other relative
+                    'other relative': 'Other-relative', 'relative': 'Other-relative',
+                    'cousin': 'Other-relative', 'aunt': 'Other-relative',
+                    'uncle': 'Other-relative', 'niece': 'Other-relative',
+                    'nephew': 'Other-relative', 'grandparent': 'Other-relative',
+                    'grandchild': 'Other-relative',
+                    
+                    # Unmarried
+                    'unmarried': 'Unmarried', 'partner': 'Unmarried',
+                    'boyfriend': 'Unmarried', 'girlfriend': 'Unmarried',
+                    'domestic partner': 'Unmarried', 'roommate': 'Unmarried',
+                }
+                
+                val_lower = val_norm.lower()
+                if val_lower in relationship_mapping:
+                    return {'valid': True, 'message': '', 'normalized': relationship_mapping[val_lower]}
+            
+            # Native Country: Country name mappings
             if field == 'native_country':
-                # Map friendly country names to technical codes
                 country_mapping = {
-                    'united states': 'United-States',
-                    'usa': 'United-States',
-                    'us': 'United-States',
-                    'colombia': 'Columbia',  # Fix spelling
-                    'netherlands': 'Holand-Netherlands',
-                    'holland': 'Holand-Netherlands',
-                    'hong kong': 'Hong',
-                    'south korea': 'South',
-                    'korea': 'South',
-                    'trinidad': 'Trinadad&Tobago',
-                    'trinidad and tobago': 'Trinadad&Tobago',
-                    'el salvador': 'El-Salvador',
-                    'salvador': 'El-Salvador',
-                    'dominican republic': 'Dominican-Republic',
-                    'puerto rico': 'Puerto-Rico',
-                    'us territory': 'Outlying-US(Guam-USVI-etc)',
-                    'guam': 'Outlying-US(Guam-USVI-etc)',
-                    'virgin islands': 'Outlying-US(Guam-USVI-etc)',
-                    'former yugoslavia': 'Yugoslavia',
+                    # United States variations
+                    'united states': 'United-States', 'usa': 'United-States', 'us': 'United-States',
+                    'u.s.': 'United-States', 'u.s.a.': 'United-States', 'america': 'United-States',
+                    'united states of america': 'United-States', 'the us': 'United-States',
+                    
+                    # Country spelling variations
+                    'colombia': 'Columbia', 'columbia': 'Columbia',
+                    'netherlands': 'Holand-Netherlands', 'holland': 'Holand-Netherlands',
+                    'hong kong': 'Hong', 'hongkong': 'Hong',
+                    'south korea': 'South', 'korea': 'South', 's korea': 'South',
+                    'trinidad': 'Trinadad&Tobago', 'trinidad and tobago': 'Trinadad&Tobago',
+                    'el salvador': 'El-Salvador', 'salvador': 'El-Salvador',
+                    'dominican republic': 'Dominican-Republic', 'dominican': 'Dominican-Republic',
+                    'puerto rico': 'Puerto-Rico', 'puertorico': 'Puerto-Rico',
+                    'us territory': 'Outlying-US(Guam-USVI-etc)', 'guam': 'Outlying-US(Guam-USVI-etc)',
+                    'virgin islands': 'Outlying-US(Guam-USVI-etc)', 'usvi': 'Outlying-US(Guam-USVI-etc)',
+                    'former yugoslavia': 'Yugoslavia', 'yugoslavia': 'Yugoslavia',
+                    
+                    # Full country names
+                    'cambodia': 'Cambodia', 'canada': 'Canada', 'china': 'China',
+                    'cuba': 'Cuba', 'ecuador': 'Ecuador', 'england': 'England',
+                    'france': 'France', 'germany': 'Germany', 'greece': 'Greece',
+                    'guatemala': 'Guatemala', 'haiti': 'Haiti', 'honduras': 'Honduras',
+                    'hungary': 'Hungary', 'india': 'India', 'iran': 'Iran',
+                    'ireland': 'Ireland', 'italy': 'Italy', 'jamaica': 'Jamaica',
+                    'japan': 'Japan', 'laos': 'Laos', 'mexico': 'Mexico',
+                    'nicaragua': 'Nicaragua', 'peru': 'Peru', 'philippines': 'Philippines',
+                    'poland': 'Poland', 'portugal': 'Portugal', 'scotland': 'Scotland',
+                    'taiwan': 'Taiwan', 'thailand': 'Thailand', 'vietnam': 'Vietnam',
+                    
+                    # Unknown
+                    'unknown': '?', 'not sure': '?', 'prefer not to say': '?',
                 }
                 
                 val_lower = val_norm.lower()
@@ -777,6 +1136,26 @@ class LoanAssistant:
                 for friendly, technical in country_mapping.items():
                     if friendly in val_lower or val_lower in friendly:
                         return {'valid': True, 'message': '', 'normalized': technical}
+            # === FALLBACK: FUZZY MATCHING WITH DIFFLIB ===
+            # If no exact mapping found, try fuzzy matching against allowed values
+            suggestions = difflib.get_close_matches(val_norm, allowed, n=1, cutoff=0.7)
+            if suggestions:
+                # Found a close match - auto-normalize to it
+                return {'valid': True, 'message': '', 'normalized': suggestions[0]}
+            
+            # Case-insensitive fuzzy match (try lowercase comparison)
+            suggestions_lower = difflib.get_close_matches(
+                val_norm.lower(), 
+                [opt.lower() for opt in allowed], 
+                n=1, 
+                cutoff=0.7
+            )
+            if suggestions_lower:
+                # Find the original allowed value
+                for opt in allowed:
+                    if opt.lower() == suggestions_lower[0]:
+                        return {'valid': True, 'message': '', 'normalized': opt}
+            
             # Special handling for generic 'other'
             if val_norm.lower() in ['other', 'others', 'something else', 'none of the above']:
                 if field == 'race' and 'Other' in allowed:
@@ -791,9 +1170,20 @@ class LoanAssistant:
                         'valid': False,
                         'message': "For relationship, the dataset has 'Other-relative' but not plain 'Other'. Please choose 'Other-relative' or a specific relationship."
                     }
+            
             # Unknown '?' permitted only if present in allowed list
             if val_norm == '?' and '?' in allowed:
                 return {'valid': True, 'message': '', 'normalized': '?'}
+            
+            # No match found - provide helpful suggestions
+            close_matches = difflib.get_close_matches(val_norm, allowed, n=3, cutoff=0.5)
+            if close_matches:
+                return {
+                    'valid': False,
+                    'message': f"'{value}' isn't a valid {self._pretty_field(field)}. Did you mean: {', '.join(close_matches)}?",
+                    'allowed': allowed
+                }
+            
             return {
                 'valid': False,
                 'message': f"'{value}' isn't a valid {self._pretty_field(field)}.",
