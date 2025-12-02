@@ -247,6 +247,125 @@ def enhance_validation_message(field: str, user_input: str, expected_format: str
         return None
 
 
+def generate_from_data(data: Dict[str, Any], explanation_type: str = "shap", high_anthropomorphism: bool = True) -> Optional[str]:
+    """Generate explanation from structured data using LLM (data-driven approach).
+    
+    Args:
+        data: Structured data dictionary containing:
+            - For SHAP: base_value, predicted_probability, threshold, top_features, loan_approved, etc.
+            - For DiCE: current_values, suggested_changes, target_class, etc.
+        explanation_type: Type of explanation ("shap", "dice", "anchor")
+        high_anthropomorphism: If True, use warm Luna style. If False, use professional AI Assistant style.
+    
+    Returns:
+        Generated explanation string, or None if LLM fails
+    """
+    if not _should_use_genai():
+        return None
+    
+    try:
+        client = _get_openai_client()
+        if client is None:
+            return None
+        
+        # Build system prompt based on anthropomorphism level and explanation type
+        if high_anthropomorphism:
+            if explanation_type == "shap":
+                system_prompt = (
+                    "You are Luna, a warm and empathetic AI loan assistant explaining why a loan decision was made. "
+                    "Generate a natural, conversational explanation from the provided data. "
+                    "Use 1-2 emojis naturally where they fit. Sound like a real human having a supportive conversation. "
+                    "For APPROVED loans: Be celebratory and highlight what helped. "
+                    "For DENIED loans: Be empathetic and explain both positive factors (that helped) and limiting factors (that held back). "
+                    "Use the 'tug-of-war' metaphor for denials - explain how features pulled in different directions. "
+                    "Structure clearly with markdown formatting. "
+                    "Preserve all numeric values exactly as provided. "
+                    "Make it feel personal and human, not robotic."
+                )
+            elif explanation_type == "dice":
+                system_prompt = (
+                    "You are Luna, a warm and empathetic AI loan assistant suggesting changes to improve approval chances. "
+                    "Generate a natural, conversational explanation from the provided data. "
+                    "Use 1-2 emojis naturally. Be encouraging and actionable. "
+                    "Structure with clear sections and numbered lists. "
+                    "Mention the What-If Lab for interactive exploration. "
+                    "Preserve all numeric values exactly as provided."
+                )
+            else:
+                system_prompt = (
+                    "You are Luna, a warm AI loan assistant. Generate a natural explanation from the provided data. "
+                    "Use 1-2 emojis naturally. Be warm and conversational. "
+                    "Preserve all numeric values exactly as provided."
+                )
+        else:
+            if explanation_type == "shap":
+                system_prompt = (
+                    "You are a professional AI loan advisor explaining why a loan decision was made. "
+                    "Generate a clear, structured explanation from the provided data. "
+                    "NO emojis. NO casual language. Use professional terminology. "
+                    "For APPROVED loans: Use 'Feature Impact Analysis' structure with 'Key Contributing Factors'. "
+                    "For DENIED loans: Use 'Feature Impact Analysis' with separate 'Positive Factors' and 'Negative Factors' sections. "
+                    "Include a 'Decision Summary' section with precise numbers. "
+                    "Use markdown formatting with bold headers and bullet points. "
+                    "Preserve all numeric values exactly as provided. "
+                    "Be direct and technical, not conversational."
+                )
+            elif explanation_type == "dice":
+                system_prompt = (
+                    "You are a professional AI loan advisor suggesting profile modifications. "
+                    "Generate a clear, structured explanation from the provided data. "
+                    "NO emojis. NO casual language. Use professional terminology. "
+                    "Structure with sections: 'Recommended Profile Modifications', 'Analysis Methodology', 'Additional Analysis'. "
+                    "Use numbered lists for changes. "
+                    "Mention the What-If Lab for scenario testing. "
+                    "Preserve all numeric values exactly as provided."
+                )
+            else:
+                system_prompt = (
+                    "You are a professional AI loan advisor. Generate a clear explanation from the provided data. "
+                    "NO emojis. Use professional language. "
+                    "Preserve all numeric values exactly as provided."
+                )
+        
+        # Build user prompt with structured data
+        import json
+        data_json = json.dumps(data, indent=2, default=str)
+        user_prompt = (
+            f"Generate a {'warm, conversational' if high_anthropomorphism else 'professional, technical'} explanation "
+            f"for this {explanation_type.upper()} analysis using the following data:\n\n"
+            f"{data_json}\n\n"
+            "Generate ONLY the explanation text. Do not add meta-commentary. "
+            "Preserve all numbers exactly as provided. "
+            f"{'Use natural language and emojis.' if high_anthropomorphism else 'Use professional language without emojis.'}"
+        )
+        
+        model_name = os.getenv("HICXAI_OPENAI_MODEL", "gpt-4o-mini")
+        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.3"))
+        max_tokens = 600 if explanation_type == "shap" else 400
+        
+        completion = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        
+        content = completion.choices[0].message.content if completion and completion.choices else None
+        
+        # Post-process: Remove letter formatting if LOW anthropomorphism
+        if content and not high_anthropomorphism:
+            content = _remove_letter_formatting(content)
+        
+        return content
+        
+    except Exception as e:
+        print(f"❌ generate_from_data failed: {e}")
+        return None
+
+
 def enhance_response(response: str, context: Optional[Dict[str, Any]] = None, response_type: str = "explanation", high_anthropomorphism: bool = True) -> str:
     """Enhance response using OpenAI to respect anthropomorphism condition (REQUIRED for quality).
 

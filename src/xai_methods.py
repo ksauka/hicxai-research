@@ -326,34 +326,20 @@ def explain_with_shap(agent, question_id=None):
             if actual_value is None or str(actual_value).strip() == '':
                 continue
             
-            # Create natural language description using feature_base
+            # Create natural language description using GLOBAL FEATURE_DISPLAY_NAMES
+            friendly_feature = get_friendly_feature_name(feature if not is_onehot else feature_base)
+            
+            # Format value with appropriate units/formatting
             if feature_base == 'age':
-                factor_desc = f"Your age (being {actual_value} years old)"
-            elif feature_base == 'education':
-                factor_desc = f"Your education level ({actual_value})"
+                formatted_value = f"{actual_value} years old"
             elif feature_base == 'hours_per_week':
-                factor_desc = f"Your work schedule (working {actual_value} hours per week)"
-            elif feature_base == 'capital_gain':
-                factor_desc = f"Your capital gains (${actual_value})"
-            elif feature_base == 'capital_loss':
-                factor_desc = f"Your capital losses (${actual_value})"
-            elif feature_base == 'marital_status':
-                factor_desc = f"Your marital status ({actual_value})"
-            elif feature_base == 'occupation':
-                factor_desc = f"Your occupation ({actual_value})"
-            elif feature_base == 'relationship':
-                factor_desc = f"Your relationship status ({actual_value})"
-            elif feature_base == 'workclass':
-                factor_desc = f"Your work class ({actual_value})"
-            elif feature_base == 'native_country':
-                factor_desc = f"Your country ({actual_value})"
-            elif feature_base == 'race':
-                factor_desc = f"Your race ({actual_value})"
-            elif feature_base == 'sex':
-                factor_desc = f"Your gender ({actual_value})"
+                formatted_value = f"{actual_value} hours per week"
+            elif feature_base == 'capital_gain' or feature_base == 'capital_loss':
+                formatted_value = f"${actual_value:,}" if isinstance(actual_value, (int, float)) else str(actual_value)
             else:
-                # Generic fallback
-                factor_desc = f"Your {feature_base.replace('_', ' ')} ({actual_value})"
+                formatted_value = str(actual_value)
+            
+            factor_desc = f"Your {friendly_feature.lower()} ({formatted_value})"
             
             if impact > 0:
                 positive_factors.append(factor_desc)
@@ -414,257 +400,132 @@ def explain_with_shap(agent, question_id=None):
         tau = 0.50
         gap_to_threshold = max(0.0, tau - pred_prob) if pred_prob is not None else 0.0
         
-        if config.show_anthropomorphic:
-            # High anthropomorphism: Warm, empathetic, human-like with emojis
-            if approved:
-                base_explanation = "Thanks for waiting — here's what helped your profile. 🎉\n\n"
-                if base_value is not None:
-                    base_explanation += f"Starting from a baseline of {base_value*100:.0f}%, your details added:\n"
-                
-                # Show top positive contributors
-                positive_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta > 0]
-                for feature, value, delta in positive_contribs[:4]:
-                    friendly_name = get_friendly_feature_name(feature)
-                    if 'capital_gain' in feature:
-                        base_explanation += f"• {friendly_name} ({fmt_money(value)}): **+{delta*100:.1f} pts**\n"
-                    elif 'age' in feature:
-                        base_explanation += f"• {friendly_name} ({value}): **+{delta*100:.1f} pts**\n"
-                    elif 'hours' in feature:
-                        base_explanation += f"• {friendly_name} ({value}/week): **+{delta*100:.1f} pts**\n"
-                    elif 'education' in feature:
-                        base_explanation += f"• {friendly_name}: **+{delta*100:.1f} pts**\n"
-                    else:
-                        # Generic format for other features
-                        base_explanation += f"• {friendly_name}: **+{delta*100:.1f} pts**\n"
-                
-                if pred_prob is not None and base_value is not None:
-                    total_lift = (pred_prob - base_value) * 100
-                    base_explanation += f"\nThat lifted your score by **+{total_lift:.1f} pts** to **{pred_prob*100:.1f}%**, above the approval line ({tau*100:.0f}%). ✨\n"
-                base_explanation += "These signals matched patterns I've seen in similar applications. 👍"
-            else:
-                # DENIED: Warm, conversational explanation with SHAP accuracy
-                # By design: only capital_loss can have negative SHAP; others are positive but not enough
-                base_explanation = "I'm really sorry this wasn't the news you were hoping for. 😔 "
-                
-                if base_value is not None and pred_prob is not None:
-                    base_explanation += f"Think of your score like a tug-of-war, starting at {base_value*100:.0f}%. "
-                
-                # Separate positive and negative contributors
-                positive_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta > 0]
-                negative_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta < 0]
-                
-                # Describe positive contributors warmly
-                if positive_contribs:
-                    # Strongest positive helper
-                    if len(positive_contribs) > 0:
-                        f, v, d = positive_contribs[0]
-                        friendly_name = get_friendly_feature_name(f)
-                        if 'capital_gain' in f:
-                            if d * 100 > 20:
-                                base_explanation += f"Your {friendly_name.lower()} of {fmt_money(v)} gave a strong pull in the right direction (about **+{d*100:.1f} pts**). "
-                            else:
-                                base_explanation += f"Your {friendly_name.lower()} of {fmt_money(v)} helped (about **+{d*100:.1f} pts**). "
-                        elif 'capital_loss' in f:
-                            base_explanation += f"Having {friendly_name.lower()} of {fmt_money(v)} added **+{d*100:.1f} pts**. "
-                        elif 'hours' in f:
-                            base_explanation += f"Working {v} hours/week added a good boost (about **+{d*100:.1f} pts**). "
-                        elif 'education' in f or 'education_num' in f:
-                            base_explanation += f"Your {friendly_name.lower()} helped push things up (about **+{d*100:.1f} pts**). "
-                        elif 'age' in f:
-                            base_explanation += f"Your age ({v}) gave a solid push (about **+{d*100:.1f} pts**). "
-                        elif 'marital' in f.lower():
-                            base_explanation += f"Being {friendly_name.lower()} helped (about **+{d*100:.1f} pts**). "
-                        else:
-                            base_explanation += f"{friendly_name} gave a lift (**+{d*100:.1f} pts**). "
-                    
-                    # Additional helpers (be specific)
-                    for f, v, d in positive_contribs[1:3]:
-                        friendly_name = get_friendly_feature_name(f)
-                        if 'capital_gain' in f:
-                            base_explanation += f"{friendly_name} of {fmt_money(v)} added **+{d*100:.1f} pts**. "
-                        elif 'capital_loss' in f:
-                            base_explanation += f"{friendly_name} added **+{d*100:.1f} pts**. "
-                        elif 'hours' in f:
-                            base_explanation += f"Working {v} hours/week added about **+{d*100:.1f} pts**. "
-                        elif 'age' in f:
-                            base_explanation += f"Your age ({v}) contributed **+{d*100:.1f} pts**. "
-                        elif 'education' in f or 'education_num' in f:
-                            base_explanation += f"{friendly_name} gave **+{d*100:.1f} pts**. "
-                        elif 'marital' in f.lower():
-                            base_explanation += f"Being {friendly_name.lower()} added **+{d*100:.1f} pts**. "
-                        else:
-                            base_explanation += f"Another detail nudged things up (**+{d*100:.1f} pts**). "
-                
-                # Describe negative contributors (factors that pulled back)
-                if negative_contribs:
-                    base_explanation += "\n\nOn the other side, "
-                    for i, (f, v, d) in enumerate(negative_contribs[:2]):
-                        friendly_name = get_friendly_feature_name(f)
-                        connector = "and " if i > 0 else ""
-                        if 'capital_loss' in f:
-                            base_explanation += f"{connector}{friendly_name.lower()} of {fmt_money(v)} tugged the rope back (**{d*100:.1f} pts**). "
-                        elif 'age' in f:
-                            base_explanation += f"{connector}age pulled things back (**{d*100:.1f} pts**). "
-                        elif 'marital' in f.lower():
-                            base_explanation += f"{connector}being {friendly_name.lower()} tugged back (**{d*100:.1f} pts**). "
-                        elif 'education' in f:
-                            base_explanation += f"{connector}{friendly_name.lower()} pulled back (**{d*100:.1f} pts**). "
-                        else:
-                            base_explanation += f"{connector}{friendly_name.lower()} tugged the rope back (**{d*100:.1f} pts**). "
-                
-                # Summary with exact numbers
-                if pred_prob is not None:
-                    base_explanation += f"\n\nWhen all those pushes and pulls settled, your score landed at **{pred_prob*100:.1f}%**, and our approval line is **{tau*100:.0f}%**"
-                    if gap_to_threshold > 0:
-                        base_explanation += f"—so we ended up about **{gap_to_threshold*100:.1f} pts short**. 📊 "
-                    else:
-                        base_explanation += ". "
-                
-                base_explanation += "I know that's disappointing. 💙"
-        else:
-            # Low anthropomorphism: Professional, technical, well-structured (like Condition 6)
-            if not approved:
-                base_explanation = "**Feature Impact Analysis**\n\n"
-                
-                # Separate positive and negative contributions
-                positive_contribs = [(f, v, d) for f, v, d in top_feature_list if d > 0]
-                negative_contribs = [(f, v, d) for f, v, d in top_feature_list if d < 0]
-                
-                if base_value is not None:
-                    base_explanation += f"**Baseline Probability:** {base_value*100:.0f}%\n\n"
-                
-                # Show positive contributors first (what helped)
-                if positive_contribs:
-                    base_explanation += "**Positive Factors** (increased approval probability):\n"
-                    for feature, value, delta in positive_contribs[:5]:
-                        friendly_name = get_friendly_feature_name(feature)
-                        base_explanation += f"• **{friendly_name}:** +{delta*100:.1f} pts"
-                        if 'capital_gain' in feature:
-                            base_explanation += f" (value: {fmt_money(value)})"
-                        elif 'capital_loss' in feature:
-                            base_explanation += f" (value: {fmt_money(value)})"
-                        elif 'hours' in feature:
-                            base_explanation += f" ({value} hours/week)"
-                        elif 'age' in feature:
-                            base_explanation += f" ({value} years)"
-                        base_explanation += "\n"
-                    base_explanation += "\n"
-                
-                # Show negative contributors (what held back)
-                if negative_contribs:
-                    base_explanation += "**Negative Factors** (decreased approval probability):\n"
-                    for feature, value, delta in negative_contribs[:5]:
-                        friendly_name = get_friendly_feature_name(feature)
-                        base_explanation += f"• **{friendly_name}:** {delta*100:.1f} pts"
-                        if 'capital_gain' in feature:
-                            base_explanation += f" (value: {fmt_money(value)})"
-                        elif 'capital_loss' in feature:
-                            base_explanation += f" (value: {fmt_money(value)})"
-                        elif 'hours' in feature:
-                            base_explanation += f" ({value} hours/week)"
-                        elif 'age' in feature:
-                            base_explanation += f" ({value} years)"
-                        base_explanation += "\n"
-                    base_explanation += "\n"
-                
-                # Summary section
-                base_explanation += "**Decision Summary:**\n"
-                if pred_prob is not None and base_value is not None:
-                    total_adjustment = (pred_prob - base_value) * 100
-                    base_explanation += f"The profile factors adjusted the probability by {total_adjustment:+.1f} pts to **{pred_prob*100:.1f}%**. "
-                base_explanation += f"The approval threshold is **{tau*100:.0f}%**, resulting in a **{gap_to_threshold*100:.1f} pt shortfall**. "
-                if negative_contribs:
-                    top_negative = get_friendly_feature_name(negative_contribs[0][0])
-                    base_explanation += f"Primary limiting factor: {top_negative} ({negative_contribs[0][2]*100:.1f} pts)."
-            else:
-                # APPROVED case
-                base_explanation = "**Feature Impact Analysis**\n\n"
-                
-                # Separate positive and negative contributions
-                positive_contribs = [(f, v, d) for f, v, d in top_feature_list if d > 0]
-                negative_contribs = [(f, v, d) for f, v, d in top_feature_list if d < 0]
-                
-                if base_value is not None:
-                    base_explanation += f"**Baseline Probability:** {base_value*100:.0f}%\n\n"
-                
-                # Show positive contributors (what helped)
-                if positive_contribs:
-                    base_explanation += "**Key Contributing Factors:**\n"
-                    for feature, value, delta in positive_contribs[:5]:
-                        friendly_name = get_friendly_feature_name(feature)
-                        base_explanation += f"• **{friendly_name}:** +{delta*100:.1f} pts"
-                        if 'capital_gain' in feature:
-                            base_explanation += f" (value: {fmt_money(value)})"
-                        elif 'capital_loss' in feature:
-                            base_explanation += f" (value: {fmt_money(value)})"
-                        elif 'hours' in feature:
-                            base_explanation += f" ({value} hours/week)"
-                        elif 'age' in feature:
-                            base_explanation += f" ({value} years)"
-                        base_explanation += "\n"
-                    base_explanation += "\n"
-                
-                # Summary section
-                base_explanation += "**Decision Summary:**\n"
-                if pred_prob is not None and base_value is not None:
-                    total_lift = (pred_prob - base_value) * 100
-                    base_explanation += f"The profile factors increased the probability by **+{total_lift:.1f} pts** to **{pred_prob*100:.1f}%**, "
-                base_explanation += f"exceeding the **{tau*100:.0f}%** approval threshold. "
-                if positive_contribs:
-                    top_positive = get_friendly_feature_name(positive_contribs[0][0])
-                    base_explanation += f"Primary contributing factor: {top_positive} (+{positive_contribs[0][2]*100:.1f} pts)."
+        # ===== DATA-DRIVEN APPROACH: Extract structured data for LLM =====
+        # Separate positive and negative contributions
+        positive_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta > 0]
+        negative_contribs = [(f, v, delta) for f, v, delta in top_feature_list if delta < 0]
         
-        # BOTH anthropomorphism levels use LLM enhancement - just with different styles
-        try:
-            if config.show_anthropomorphic:
-                print("🤖 DEBUG: Attempting LLM enhancement for HIGH anthropomorphism...")
-            else:
-                print("🤖 DEBUG: Attempting LLM enhancement for LOW anthropomorphism...")
-            
-            from natural_conversation import enhance_response
-            context = {
-                'explanation_type': 'feature_importance',
-                'loan_approved': approved,
-                'predicted_probability': pred_prob,
-                'base_probability': base_value,
-                'gap_to_threshold': gap_to_threshold
+        # Build structured data dictionary
+        structured_data = {
+            'decision': 'approved' if approved else 'denied',
+            'base_probability': f"{base_value*100:.1f}%" if base_value is not None else "N/A",
+            'predicted_probability': f"{pred_prob*100:.1f}%" if pred_prob is not None else "N/A",
+            'threshold': f"{tau*100:.0f}%",
+            'gap_to_threshold': f"{gap_to_threshold*100:.1f} pts" if gap_to_threshold > 0 else "0.0 pts",
+            'total_adjustment': f"{(pred_prob - base_value)*100:+.1f} pts" if (pred_prob is not None and base_value is not None) else "N/A",
+            'positive_factors': [],
+            'negative_factors': []
+        }
+        
+        # Format positive contributors
+        for feature, value, delta in positive_contribs[:5]:
+            friendly_name = get_friendly_feature_name(feature)
+            factor_entry = {
+                'feature': friendly_name,
+                'impact': f"+{delta*100:.1f} pts",
+                'impact_numeric': delta * 100
             }
-            print(f"🤖 DEBUG: Base explanation length: {len(base_explanation)} chars")
+            if 'capital_gain' in feature or 'capital_loss' in feature:
+                factor_entry['value'] = fmt_money(value)
+            elif 'hours' in feature:
+                factor_entry['value'] = f"{value} hours/week"
+            elif 'age' in feature:
+                factor_entry['value'] = f"{value} years"
+            else:
+                factor_entry['value'] = str(value)
+            structured_data['positive_factors'].append(factor_entry)
+        
+        # Format negative contributors
+        for feature, value, delta in negative_contribs[:5]:
+            friendly_name = get_friendly_feature_name(feature)
+            factor_entry = {
+                'feature': friendly_name,
+                'impact': f"{delta*100:.1f} pts",
+                'impact_numeric': delta * 100
+            }
+            if 'capital_gain' in feature or 'capital_loss' in feature:
+                factor_entry['value'] = fmt_money(value)
+            elif 'hours' in feature:
+                factor_entry['value'] = f"{value} hours/week"
+            elif 'age' in feature:
+                factor_entry['value'] = f"{value} years"
+            else:
+                factor_entry['value'] = str(value)
+            structured_data['negative_factors'].append(factor_entry)
+        
+        # Generate explanation from data using LLM (respects anthropomorphism condition)
+        explanation = None
+        try:
+            from natural_conversation import generate_from_data
             
-            # Pass anthropomorphism level to get appropriate style
-            enhanced = enhance_response(
-                base_explanation, 
-                context, 
-                "explanation",
+            print(f"🤖 DEBUG: Generating SHAP explanation from data (anthropomorphic={config.show_anthropomorphic})...")
+            
+            explanation = generate_from_data(
+                data=structured_data,
+                explanation_type='shap',
                 high_anthropomorphism=config.show_anthropomorphic
             )
-            print(f"🤖 DEBUG: Enhanced explanation length: {len(enhanced) if enhanced else 0} chars")
             
-            # Detect if response was cut off (incomplete sentence)
-            is_complete = True
-            if enhanced:
-                # Check if ends with proper punctuation or is clearly incomplete
-                last_chars = enhanced.strip()[-20:] if len(enhanced) > 20 else enhanced.strip()
-                if not any(enhanced.strip().endswith(p) for p in ['.', '!', '✨', '👍', '💙', '📊', ')']):
-                    if 'brought it' in last_chars or 'pulled back' in last_chars or 'your education' in last_chars:
-                        print("⚠️ DEBUG: Detected incomplete sentence (cut off mid-explanation)")
-                        is_complete = False
-            
-            # Use enhanced version if complete, not empty, and reasonable length
-            if enhanced and is_complete and len(enhanced) > 50 and len(enhanced) < len(base_explanation) * 2:
-                print("✅ DEBUG: Using LLM-enhanced explanation")
-                explanation = enhanced
+            if explanation and len(explanation) > 50:
+                print(f"✅ DEBUG: Generated explanation ({len(explanation)} chars)")
             else:
-                if not is_complete:
-                    print(f"⚠️ DEBUG: LLM output incomplete - using base explanation")
-                else:
-                    print(f"⚠️ DEBUG: LLM output rejected (empty={not enhanced}, length check failed)")
-                explanation = base_explanation
+                print(f"⚠️ DEBUG: LLM generation failed or too short")
+                explanation = None
+                
         except Exception as e:
-            print(f"❌ DEBUG: LLM enhancement failed: {e}")
-            import traceback
-            traceback.print_exc()
-            explanation = base_explanation
+            print(f"❌ DEBUG: LLM generation failed: {e}")
+            explanation = None
+        
+        # Fallback templates if LLM fails (preserves experimental conditions)
+        if not explanation:
+            print("⚠️ DEBUG: Using fallback template")
+            if config.show_anthropomorphic:
+                # High anthropomorphism fallback
+                if approved:
+                    explanation = f"Thanks for waiting — your application was approved! 🎉\n\n"
+                    explanation += f"Starting from {structured_data['base_probability']}, key factors helped:\n"
+                    for factor in structured_data['positive_factors'][:4]:
+                        explanation += f"• {factor['feature']} ({factor['value']}): **{factor['impact']}**\n"
+                    explanation += f"\nFinal score: **{structured_data['predicted_probability']}** (threshold: {structured_data['threshold']}) ✨"
+                else:
+                    explanation = f"I'm sorry this wasn't the news you were hoping for. 😔\n\n"
+                    explanation += f"Starting from {structured_data['base_probability']}, here's what happened:\n\n"
+                    if structured_data['positive_factors']:
+                        explanation += "**What helped:**\n"
+                        for factor in structured_data['positive_factors'][:3]:
+                            explanation += f"• {factor['feature']} ({factor['value']}): **{factor['impact']}**\n"
+                    if structured_data['negative_factors']:
+                        explanation += "\n**What held back:**\n"
+                        for factor in structured_data['negative_factors'][:2]:
+                            explanation += f"• {factor['feature']} ({factor['value']}): **{factor['impact']}**\n"
+                    explanation += f"\nFinal score: **{structured_data['predicted_probability']}** (needed: {structured_data['threshold']}, gap: {structured_data['gap_to_threshold']}) 💙"
+            else:
+                # Low anthropomorphism fallback
+                if approved:
+                    explanation = "**Feature Impact Analysis**\n\n"
+                    explanation += f"**Baseline Probability:** {structured_data['base_probability']}\n\n"
+                    explanation += "**Key Contributing Factors:**\n"
+                    for factor in structured_data['positive_factors'][:5]:
+                        explanation += f"• **{factor['feature']}:** {factor['impact']} (value: {factor['value']})\n"
+                    explanation += f"\n**Decision Summary:**\n"
+                    explanation += f"Factors increased probability by {structured_data['total_adjustment']} to **{structured_data['predicted_probability']}**, "
+                    explanation += f"exceeding the **{structured_data['threshold']}** approval threshold."
+                else:
+                    explanation = "**Feature Impact Analysis**\n\n"
+                    explanation += f"**Baseline Probability:** {structured_data['base_probability']}\n\n"
+                    if structured_data['positive_factors']:
+                        explanation += "**Positive Factors** (increased approval probability):\n"
+                        for factor in structured_data['positive_factors'][:5]:
+                            explanation += f"• **{factor['feature']}:** {factor['impact']} (value: {factor['value']})\n"
+                        explanation += "\n"
+                    if structured_data['negative_factors']:
+                        explanation += "**Negative Factors** (decreased approval probability):\n"
+                        for factor in structured_data['negative_factors'][:5]:
+                            explanation += f"• **{factor['feature']}:** {factor['impact']} (value: {factor['value']})\n"
+                        explanation += "\n"
+                    explanation += "**Decision Summary:**\n"
+                    explanation += f"Profile factors adjusted probability by {structured_data['total_adjustment']} to **{structured_data['predicted_probability']}**. "
+                    explanation += f"Approval threshold: **{structured_data['threshold']}**, shortfall: **{structured_data['gap_to_threshold']}**."
         
         result = {
             'type': 'shap',
@@ -801,25 +662,24 @@ def explain_with_dice(agent, target_class=None, features='all'):
                         is_different = False
                     
                     if is_different:
-                        # Format with natural language based on feature type
+                        # Format with natural language using GLOBAL FEATURE_DISPLAY_NAMES
+                        friendly_name = get_friendly_feature_name(col)
+                        
+                        # Format values with appropriate units
                         if col == 'age':
-                            changes.append(f"Your age (changing from {orig_val} to {cf_val} years old)")
-                        elif col == 'education_num' or col == 'education':
-                            changes.append(f"Your education level (from {orig_val} to {cf_val})")
+                            from_val = f"{orig_val} years old"
+                            to_val = f"{cf_val} years old"
                         elif col == 'hours_per_week':
-                            changes.append(f"Your work schedule (from {orig_val} to {cf_val} hours per week)")
-                        elif col == 'capital_gain':
-                            changes.append(f"Your capital gains (from ${orig_val} to ${cf_val})")
-                        elif col == 'capital_loss':
-                            changes.append(f"Your capital losses (from ${orig_val} to ${cf_val})")
-                        elif col == 'occupation':
-                            changes.append(f"Your occupation (from {orig_val} to {cf_val})")
-                        elif col == 'marital_status':
-                            changes.append(f"Your marital status (from {orig_val} to {cf_val})")
-                        elif col == 'relationship':
-                            changes.append(f"Your relationship status (from {orig_val} to {cf_val})")
+                            from_val = f"{orig_val} hours per week"
+                            to_val = f"{cf_val} hours per week"
+                        elif 'capital' in col:
+                            from_val = f"${orig_val:,}" if isinstance(orig_val, (int, float)) else str(orig_val)
+                            to_val = f"${cf_val:,}" if isinstance(cf_val, (int, float)) else str(cf_val)
                         else:
-                            changes.append(f"Your {col.replace('_', ' ')} (from {orig_val} to {cf_val})")
+                            from_val = str(orig_val)
+                            to_val = str(cf_val)
+                        
+                        changes.append(f"Your {friendly_name.lower()} (changing from {from_val} to {to_val})")
             
         except Exception as dice_error:
             # Fallback to rule-based analysis if DiCE fails
@@ -867,13 +727,8 @@ def explain_with_dice(agent, target_class=None, features='all'):
             
             # Check capital gain
             current_capital_gain = current_instance.get('capital_gain', 0)
-            if current_capital_gain < 7000:
-                # Use descriptive text to prevent LLM from reformatting numbers
-                current_gain_int = int(current_capital_gain)
-                if current_gain_int == 0:
-                    changes.append("Your capital gains (increasing to seven thousand dollars or more annually)")
-                else:
-                    changes.append(f"Your capital gains (increasing from your current level to seven thousand dollars or more annually)")
+            if current_capital_gain < 5000:
+                changes.append(f"Your capital gains (increasing from ${current_capital_gain} to $5,000 or more)")
             
             # Check age
             current_age = current_instance.get('age', 0)
@@ -888,96 +743,69 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 "Your work schedule (working full-time, 40+ hours per week)"
             ]
         
-        # Generate base explanation with language differentiation
-        if config.show_anthropomorphic:
-            # High anthropomorphism: Warm, conversational, well-formatted (like Condition 6)
-            if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
-                base_explanation = "💡 **What could help your application?**\n\n"
-                base_explanation += "I've looked at similar profiles that got approved, and here are changes that could really make a difference:\n\n"
-                for i, change in enumerate(changes[:5], 1):
-                    base_explanation += f"**{i}.** {change}\n"
-                base_explanation += "\n✨ **Why these suggestions?**\n"
-                base_explanation += "These factors came up again and again in successful applications from people with similar starting points. They're not guarantees, but they represent real patterns in how decisions tend to go.\n"
-                base_explanation += "\n🧪 **Want to explore more?**\n"
-                base_explanation += "For further analysis on how you can change your situation, use the **What-If Lab** provided on the left sidebar! You can adjust these factors in real-time and see exactly how they'd affect your application probability. It's a great way to plan your next steps. 👍"
-            else:
-                base_explanation = "🔄 **What might change the outcome?**\n\n"
-                base_explanation += "Your application was approved, but it's interesting to think about what factors made the difference. Here's what could have affected the decision:\n\n"
-                for i, change in enumerate(changes[:5], 1):
-                    base_explanation += f"**{i}.** {change}\n"
-                base_explanation += "\n💭 **Understanding the patterns:**\n"
-                base_explanation += "These insights come from analyzing thousands of similar applications. Each factor plays a role in how the overall assessment shakes out.\n"
-                base_explanation += "\n🧪 **Curious to experiment?**\n"
-                base_explanation += "For further analysis on how you can change your situation, check out the **What-If Lab** on the left sidebar! You can test different scenarios and see how various changes would impact the decision. It's pretty eye-opening! ✨"
-        else:
-            # Low anthropomorphism: Professional, structured, comprehensive (like Condition 6)
-            if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
-                base_explanation = "**Recommended Profile Modifications**\n\n"
-                base_explanation += "**Key Changes for Approval:**\n"
-                base_explanation += "Based on comparative analysis of approved applications with similar baseline profiles, the following modifications have been identified as having positive impact on approval probability:\n\n"
-                for i, change in enumerate(changes[:5], 1):
-                    base_explanation += f"**{i}.** {change}\n"
-                
-                base_explanation += "\n**Analysis Methodology:**\n"
-                base_explanation += "This assessment is based on statistical patterns observed in the training dataset. "
-                base_explanation += "The recommendations reflect factors that differentiate approved from denied applications among profiles with similar demographic and financial characteristics. "
-                base_explanation += "These represent statistically significant predictors, though individual outcomes may vary based on the specific combination of factors.\n"
-                
-                base_explanation += "\n**Additional Analysis:**\n"
-                base_explanation += "For interactive scenario testing, refer to the What-If Lab tool (available in applicable configurations) to explore how specific modifications would affect approval probability."
-            else:
-                base_explanation = "**Profile Impact Analysis**\n\n"
-                base_explanation += "**Decision-Influencing Factors:**\n"
-                base_explanation += "The following profile characteristics were instrumental in achieving approval. This analysis identifies factors that distinguish your profile from similar cases with different outcomes:\n\n"
-                for i, change in enumerate(changes[:5], 1):
-                    base_explanation += f"**{i}.** {change}\n"
-                
-                base_explanation += "\n**Analysis Methodology:**\n"
-                base_explanation += "This assessment is derived from comparative analysis of approval patterns across the training dataset. "
-                base_explanation += "The identified factors represent statistically significant differentiators between approved and denied applications in similar demographic and financial cohorts. "
-                base_explanation += "The analysis provides insight into which profile characteristics had the strongest positive influence on the approval decision.\n"
-                
-                base_explanation += "\n**Additional Analysis:**\n"
-                base_explanation += "For interactive scenario exploration, refer to the What-If Lab tool (available in applicable configurations) to test how modifications to these factors would affect approval probability."
+        # ===== DATA-DRIVEN APPROACH: Extract structured data for LLM =====
+        structured_data = {
+            'decision': current_pred,
+            'target_class': target_class,
+            'num_changes': len(changes),
+            'suggested_changes': changes[:5],
+            'is_denied': 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred)
+        }
         
-        # Enhance with LLM for natural language while preserving factual content
+        # Generate explanation from data using LLM (respects anthropomorphism condition)
+        explanation = None
         try:
-            print(f"🤖 DEBUG (Counterfactual): Attempting LLM enhancement (anthropomorphic={config.show_anthropomorphic})...")
-            from natural_conversation import enhance_response
+            from natural_conversation import generate_from_data
             
-            context = {
-                'decision': current_pred,
-                'num_changes': len(changes),
-                'explanation_type': 'counterfactual'
-            }
+            print(f"🤖 DEBUG (DiCE): Generating explanation from data (anthropomorphic={config.show_anthropomorphic})...")
             
-            print(f"🤖 DEBUG: Base explanation length: {len(base_explanation)} chars")
-            
-            # Use LLM to make it more natural while respecting anthropomorphism
-            explanation = enhance_response(
-                base_explanation, 
-                context=context,
-                response_type='explanation',
+            explanation = generate_from_data(
+                data=structured_data,
+                explanation_type='dice',
                 high_anthropomorphism=config.show_anthropomorphic
             )
             
-            print(f"🤖 DEBUG: Enhanced explanation length: {len(explanation) if explanation else 0} chars")
-            
-            # If LLM fails or returns empty, use base explanation
-            if not explanation or len(explanation.strip()) < 20:
-                print("⚠️ DEBUG: LLM output rejected (empty or too short) - using base explanation")
-                explanation = base_explanation
+            if explanation and len(explanation) > 50:
+                print(f"✅ DEBUG: Generated counterfactual explanation ({len(explanation)} chars)")
             else:
-                print("✅ DEBUG: Using LLM-enhanced counterfactual explanation")
+                print(f"⚠️ DEBUG: LLM generation failed or too short")
+                explanation = None
                 
         except Exception as e:
-            # Fallback to base explanation if LLM fails
-            print(f"❌ DEBUG: LLM enhancement failed: {e}")
-            import traceback
-            traceback.print_exc()
-            explanation = base_explanation
+            print(f"❌ DEBUG: LLM generation failed: {e}")
+            explanation = None
         
-        # Ensure current_instance is a dict for return values
+        # Fallback templates if LLM fails (preserves experimental conditions)
+        if not explanation:
+            print("⚠️ DEBUG: Using fallback template")
+            if config.show_anthropomorphic:
+                # High anthropomorphism fallback
+                if structured_data['is_denied']:
+                    explanation = "💡 **What could help your application?**\n\n"
+                    explanation += "Here are changes that could make a difference:\n\n"
+                    for i, change in enumerate(changes[:5], 1):
+                        explanation += f"**{i}.** {change}\n"
+                    explanation += "\n✨ These factors show up in successful applications. Try the What-If Lab to explore more! 👍"
+                else:
+                    explanation = "🔄 **What might change the outcome?**\n\n"
+                    explanation += "Here's what could affect the decision:\n\n"
+                    for i, change in enumerate(changes[:5], 1):
+                        explanation += f"**{i}.** {change}\n"
+                    explanation += "\n💭 Check out the What-If Lab to test scenarios! ✨"
+            else:
+                # Low anthropomorphism fallback
+                if structured_data['is_denied']:
+                    explanation = "**Recommended Profile Modifications**\n\n"
+                    for i, change in enumerate(changes[:5], 1):
+                        explanation += f"**{i}.** {change}\n"
+                    explanation += "\nAnalysis based on approved application patterns. Refer to What-If Lab for interactive testing."
+                else:
+                    explanation = "**Profile Impact Analysis**\n\n"
+                    for i, change in enumerate(changes[:5], 1):
+                        explanation += f"**{i}.** {change}\n"
+                    explanation += "\nData-driven insights from comparative analysis. Refer to What-If Lab for exploration."
+        
+        # Ensure current_instance is a dict for return values        # Ensure current_instance is a dict for return values
         instance_dict = current_instance
         if hasattr(current_instance, 'to_dict'):
             instance_dict = current_instance.to_dict()
@@ -1020,51 +848,61 @@ def explain_with_anchor(agent):
             # Age rule
             age = current_instance.get('age', 0)
             if age > 35:
-                rules_friendly.append(f"Your age (being {age} years old)")
+                friendly = get_friendly_feature_name('age')
+                rules_friendly.append(f"Your {friendly.lower()} ({age} years old)")
                 rules_technical.append(f"age > 35 (value: {age})")
             elif age < 25:
-                rules_friendly.append(f"Your age (being {age} years old)")
+                friendly = get_friendly_feature_name('age')
+                rules_friendly.append(f"Your {friendly.lower()} ({age} years old)")
                 rules_technical.append(f"age < 25 (value: {age})")
             
             # Education rule
             education_num = current_instance.get('education_num', 0)
             education = current_instance.get('education', 'Unknown')
             if education_num >= 13:
-                rules_friendly.append(f"Your education level (having {education})")
+                friendly = get_friendly_feature_name('education_num')
+                rules_friendly.append(f"Your {friendly.lower()} ({education})")
                 rules_technical.append(f"education_num >= 13 (Bachelor's or higher)")
             elif education_num < 9:
-                rules_friendly.append(f"Your education level ({education})")
+                friendly = get_friendly_feature_name('education_num')
+                rules_friendly.append(f"Your {friendly.lower()} ({education})")
                 rules_technical.append(f"education_num < 9 (less than HS)")
             
             # Hours rule
             hours = current_instance.get('hours_per_week', 0)
             if hours >= 40:
-                rules_friendly.append(f"Your work schedule (working {hours} hours per week)")
+                friendly = get_friendly_feature_name('hours_per_week')
+                rules_friendly.append(f"Your {friendly.lower()} ({hours} hours per week)")
                 rules_technical.append(f"hours_per_week >= 40 (value: {hours})")
             elif hours < 30:
-                rules_friendly.append(f"Your work schedule (working {hours} hours per week)")
+                friendly = get_friendly_feature_name('hours_per_week')
+                rules_friendly.append(f"Your {friendly.lower()} ({hours} hours per week)")
                 rules_technical.append(f"hours_per_week < 30 (value: {hours})")
             
             # Marital status rule
             marital = current_instance.get('marital_status', '')
             if 'Married' in marital:
-                rules_friendly.append(f"Your marital status ({marital})")
+                friendly = get_friendly_feature_name('marital_status')
+                rules_friendly.append(f"Your {friendly.lower()} ({marital})")
                 rules_technical.append(f"marital_status = '{marital}'")
             
             # Capital gain rule
             capital_gain = current_instance.get('capital_gain', 0)
             if capital_gain > 5000:
-                rules_friendly.append(f"Your capital gains (${capital_gain})")
+                friendly = get_friendly_feature_name('capital_gain')
+                rules_friendly.append(f"Your {friendly.lower()} (${capital_gain:,})")
                 rules_technical.append(f"capital_gain > 5000 (value: {capital_gain})")
             elif capital_gain > 0:
-                rules_friendly.append(f"Your capital gains (${capital_gain})")
+                friendly = get_friendly_feature_name('capital_gain')
+                rules_friendly.append(f"Your {friendly.lower()} (${capital_gain:,})")
                 rules_technical.append(f"capital_gain > 0 (value: {capital_gain})")
             
             # Occupation rule
             occupation = current_instance.get('occupation', '')
             if occupation:
                 if any(x in occupation for x in ['Exec', 'Prof', 'Managerial']):
-                    rules_friendly.append(f"Your occupation ({occupation})")
+                    friendly = get_friendly_feature_name('occupation')
+                    rules_friendly.append(f"Your {friendly.lower()} ({occupation})")
                     rules_technical.append(f"occupation = '{occupation}' (professional)")
         
         # Estimate precision and coverage based on feature importance
