@@ -522,47 +522,97 @@ def explain_with_shap(agent, question_id=None):
                 
                 base_explanation += "I know that's disappointing. 💙"
         else:
-            # Low anthropomorphism: Professional, technical, focused on feature analysis
-            base_explanation = "**Feature Contributions:**\n"
-            base_explanation += "The following factors contributed to the probability adjustment:\n\n"
-            
-            # Separate positive and negative contributions
-            positive_contribs = [(f, v, d) for f, v, d in top_feature_list if d > 0]
-            negative_contribs = [(f, v, d) for f, v, d in top_feature_list if d < 0]
-            
-            if negative_contribs:
-                base_explanation += "*Negative Factors (decreased approval probability):*\n"
-                for feature, value, delta in negative_contribs[:5]:
-                    friendly_name = get_friendly_feature_name(feature)
-                    base_explanation += f"• **{friendly_name}:** {delta*100:.1f} pts"
-                    if 'capital' in feature.lower() or 'hours' in feature.lower() or 'age' in feature.lower():
-                        base_explanation += f" (value: {value})"
-                    base_explanation += "\n"
-                base_explanation += "\n"
-            
-            if positive_contribs:
-                base_explanation += "*Positive Factors (increased approval probability):*\n"
-                for feature, value, delta in positive_contribs[:5]:
-                    friendly_name = get_friendly_feature_name(feature)
-                    base_explanation += f"• **{friendly_name}:** +{delta*100:.1f} pts"
-                    if 'capital' in feature.lower() or 'hours' in feature.lower() or 'age' in feature.lower():
-                        base_explanation += f" (value: {value})"
-                    base_explanation += "\n"
-                base_explanation += "\n"
-            
-            base_explanation += "**Analysis Summary:**\n"
+            # Low anthropomorphism: Professional, technical, well-structured (like Condition 6)
             if not approved:
-                base_explanation += f"The model calculated a {pred_prob*100:.1f}% approval probability based on the profile characteristics. "
-                base_explanation += f"This falls {gap_to_threshold*100:.1f} percentage points below the {tau*100:.1f}% threshold required for approval. "
+                base_explanation = "**Feature Impact Analysis**\n\n"
+                
+                # Separate positive and negative contributions
+                positive_contribs = [(f, v, d) for f, v, d in top_feature_list if d > 0]
+                negative_contribs = [(f, v, d) for f, v, d in top_feature_list if d < 0]
+                
+                if base_value is not None:
+                    base_explanation += f"**Baseline Probability:** {base_value*100:.0f}%\n\n"
+                
+                # Show positive contributors first (what helped)
+                if positive_contribs:
+                    base_explanation += "**Positive Factors** (increased approval probability):\n"
+                    for feature, value, delta in positive_contribs[:5]:
+                        friendly_name = get_friendly_feature_name(feature)
+                        base_explanation += f"• **{friendly_name}:** +{delta*100:.1f} pts"
+                        if 'capital_gain' in feature:
+                            base_explanation += f" (value: {fmt_money(value)})"
+                        elif 'capital_loss' in feature:
+                            base_explanation += f" (value: {fmt_money(value)})"
+                        elif 'hours' in feature:
+                            base_explanation += f" ({value} hours/week)"
+                        elif 'age' in feature:
+                            base_explanation += f" ({value} years)"
+                        base_explanation += "\n"
+                    base_explanation += "\n"
+                
+                # Show negative contributors (what held back)
+                if negative_contribs:
+                    base_explanation += "**Negative Factors** (decreased approval probability):\n"
+                    for feature, value, delta in negative_contribs[:5]:
+                        friendly_name = get_friendly_feature_name(feature)
+                        base_explanation += f"• **{friendly_name}:** {delta*100:.1f} pts"
+                        if 'capital_gain' in feature:
+                            base_explanation += f" (value: {fmt_money(value)})"
+                        elif 'capital_loss' in feature:
+                            base_explanation += f" (value: {fmt_money(value)})"
+                        elif 'hours' in feature:
+                            base_explanation += f" ({value} hours/week)"
+                        elif 'age' in feature:
+                            base_explanation += f" ({value} years)"
+                        base_explanation += "\n"
+                    base_explanation += "\n"
+                
+                # Summary section
+                base_explanation += "**Decision Summary:**\n"
+                if pred_prob is not None and base_value is not None:
+                    total_adjustment = (pred_prob - base_value) * 100
+                    base_explanation += f"The profile factors adjusted the probability by {total_adjustment:+.1f} pts to **{pred_prob*100:.1f}%**. "
+                base_explanation += f"The approval threshold is **{tau*100:.0f}%**, resulting in a **{gap_to_threshold*100:.1f} pt shortfall**. "
                 if negative_contribs:
                     top_negative = get_friendly_feature_name(negative_contribs[0][0])
-                    base_explanation += f"The primary limiting factor was {top_negative} ({negative_contribs[0][2]*100:.1f} pts)."
+                    base_explanation += f"Primary limiting factor: {top_negative} ({negative_contribs[0][2]*100:.1f} pts)."
             else:
-                base_explanation += f"The model calculated a {pred_prob*100:.1f}% approval probability based on the profile characteristics. "
-                base_explanation += f"This exceeds the {tau*100:.1f}% threshold by {abs(pred_prob - tau)*100:.1f} percentage points. "
+                # APPROVED case
+                base_explanation = "**Feature Impact Analysis**\n\n"
+                
+                # Separate positive and negative contributions
+                positive_contribs = [(f, v, d) for f, v, d in top_feature_list if d > 0]
+                negative_contribs = [(f, v, d) for f, v, d in top_feature_list if d < 0]
+                
+                if base_value is not None:
+                    base_explanation += f"**Baseline Probability:** {base_value*100:.0f}%\n\n"
+                
+                # Show positive contributors (what helped)
+                if positive_contribs:
+                    base_explanation += "**Key Contributing Factors:**\n"
+                    for feature, value, delta in positive_contribs[:5]:
+                        friendly_name = get_friendly_feature_name(feature)
+                        base_explanation += f"• **{friendly_name}:** +{delta*100:.1f} pts"
+                        if 'capital_gain' in feature:
+                            base_explanation += f" (value: {fmt_money(value)})"
+                        elif 'capital_loss' in feature:
+                            base_explanation += f" (value: {fmt_money(value)})"
+                        elif 'hours' in feature:
+                            base_explanation += f" ({value} hours/week)"
+                        elif 'age' in feature:
+                            base_explanation += f" ({value} years)"
+                        base_explanation += "\n"
+                    base_explanation += "\n"
+                
+                # Summary section
+                base_explanation += "**Decision Summary:**\n"
+                if pred_prob is not None and base_value is not None:
+                    total_lift = (pred_prob - base_value) * 100
+                    base_explanation += f"The profile factors increased the probability by **+{total_lift:.1f} pts** to **{pred_prob*100:.1f}%**, "
+                base_explanation += f"exceeding the **{tau*100:.0f}%** approval threshold. "
                 if positive_contribs:
                     top_positive = get_friendly_feature_name(positive_contribs[0][0])
-                    base_explanation += f"The primary contributing factor was {top_positive} (+{positive_contribs[0][2]*100:.1f} pts)."
+                    base_explanation += f"Primary contributing factor: {top_positive} (+{positive_contribs[0][2]*100:.1f} pts)."
         
         # BOTH anthropomorphism levels use LLM enhancement - just with different styles
         try:
@@ -860,25 +910,35 @@ def explain_with_dice(agent, target_class=None, features='all'):
                 base_explanation += "\n🧪 **Curious to experiment?**\n"
                 base_explanation += "For further analysis on how you can change your situation, check out the **What-If Lab** on the left sidebar! You can test different scenarios and see how various changes would impact the decision. It's pretty eye-opening! ✨"
         else:
-            # Low anthropomorphism: Professional, structured, comprehensive
+            # Low anthropomorphism: Professional, structured, comprehensive (like Condition 6)
             if 'not' in str(current_pred).lower() or 'denied' in str(current_pred).lower() or '<' in str(current_pred):
-                base_explanation = "**Profile Modifications for Approval**\n\n"
-                base_explanation += "**Recommended Profile Modifications:**\n"
-                base_explanation += "The following changes have been identified as having positive impact on approval probability:\n\n"
+                base_explanation = "**Recommended Profile Modifications**\n\n"
+                base_explanation += "**Key Changes for Approval:**\n"
+                base_explanation += "Based on comparative analysis of approved applications with similar baseline profiles, the following modifications have been identified as having positive impact on approval probability:\n\n"
                 for i, change in enumerate(changes[:5], 1):
-                    base_explanation += f"{i}. {change}\n"
-                base_explanation += "\n**Methodology:**\n"
-                base_explanation += "This analysis is based on comparative patterns observed in approved applications with similar baseline demographic and financial profiles. "
-                base_explanation += "The recommendations reflect statistically significant factors that differentiate approved from denied applications in the training dataset."
+                    base_explanation += f"**{i}.** {change}\n"
+                
+                base_explanation += "\n**Analysis Methodology:**\n"
+                base_explanation += "This assessment is based on statistical patterns observed in the training dataset. "
+                base_explanation += "The recommendations reflect factors that differentiate approved from denied applications among profiles with similar demographic and financial characteristics. "
+                base_explanation += "These represent statistically significant predictors, though individual outcomes may vary based on the specific combination of factors.\n"
+                
+                base_explanation += "\n**Additional Analysis:**\n"
+                base_explanation += "For interactive scenario testing, refer to the What-If Lab tool (available in applicable configurations) to explore how specific modifications would affect approval probability."
             else:
-                base_explanation = "**Decision-Influencing Factors**\n\n"
-                base_explanation += "**Key Contributing Factors:**\n"
-                base_explanation += "The following profile characteristics were instrumental in achieving approval:\n\n"
+                base_explanation = "**Profile Impact Analysis**\n\n"
+                base_explanation += "**Decision-Influencing Factors:**\n"
+                base_explanation += "The following profile characteristics were instrumental in achieving approval. This analysis identifies factors that distinguish your profile from similar cases with different outcomes:\n\n"
                 for i, change in enumerate(changes[:5], 1):
-                    base_explanation += f"{i}. {change}\n"
-                base_explanation += "\n**Analysis Method:**\n"
-                base_explanation += "This assessment identifies factors that distinguish your profile from similar cases with different outcomes. "
-                base_explanation += "The analysis is derived from comparative patterns across the training dataset."
+                    base_explanation += f"**{i}.** {change}\n"
+                
+                base_explanation += "\n**Analysis Methodology:**\n"
+                base_explanation += "This assessment is derived from comparative analysis of approval patterns across the training dataset. "
+                base_explanation += "The identified factors represent statistically significant differentiators between approved and denied applications in similar demographic and financial cohorts. "
+                base_explanation += "The analysis provides insight into which profile characteristics had the strongest positive influence on the approval decision.\n"
+                
+                base_explanation += "\n**Additional Analysis:**\n"
+                base_explanation += "For interactive scenario exploration, refer to the What-If Lab tool (available in applicable configurations) to test how modifications to these factors would affect approval probability."
         
         # Enhance with LLM for natural language while preserving factual content
         try:

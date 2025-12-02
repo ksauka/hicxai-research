@@ -1770,8 +1770,10 @@ class LoanAssistant:
         
         if config.show_anthropomorphic:
             footer = "\n\n✨ **Or just describe it naturally** - I can understand variations like 'private', 'bachelor', 'single', etc.!"
+            footer += "\n\n👇 **Even easier:** Look for the **clickable quick-select buttons** right below this chat - just click your choice!"
         else:
             footer = "\n\nNote: Natural language variations (e.g., 'private', 'bachelor', 'single') are also accepted."
+            footer += "\n\n**Quick-select buttons:** Clickable options are displayed below the chat for faster selection."
         
         return header + options_list + footer
     
