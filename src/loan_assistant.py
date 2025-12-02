@@ -236,7 +236,7 @@ class LoanAssistant:
             # High anthropomorphism: Warm, personal, conversational
             if any(keyword in user_input.lower() for keyword in greeting_keywords) or user_input.lower() in ['yes', 'y']:
                 self.conversation_state = ConversationState.COLLECTING_INFO
-                return ("Hello! I'm Luna, your personal loan application assistant. 😊 I will process your information and provide you with your loan qualification results. If you have any questions about the results, feel free to ask!\n\n"
+                base_greeting = ("Hello! I'm Luna, your personal loan application assistant. 😊 I will process your information and provide you with your loan qualification results. If you have any questions about the results, feel free to ask!\n\n"
                        "**I will collect information step by step** (not all at once) and you can **track your progress on the Progress Tracker** in the sidebar:\n"
                        "• **Step 1-2:** Personal Information (Age, Gender, etc.)\n"
                        "• **Step 3-5:** Employment Details (Work Class, Occupation, Hours)\n"
@@ -244,9 +244,20 @@ class LoanAssistant:
                        "• **Step 7-8:** Financial Information (Capital Gains/Losses)\n"
                        "• **Step 9-10:** Background & Relationship Status\n\n"
                        "**Check the blue progress bar on the left to see your completion status!**\n\n"
-                       "Let's start with **Step 1:**\n\n" + self._get_next_question())
+                       "Let's start with **Step 1:**")
+                
+                # Enhance greeting with LLM
+                if NATURAL_CONVERSATION_AVAILABLE:
+                    try:
+                        enhanced = enhance_response(base_greeting, {}, \"greeting\", high_anthropomorphism=True)
+                        if enhanced and len(enhanced.strip()) > 20:
+                            return f"{enhanced}\\n\\n{self._get_next_question()}"
+                    except Exception:
+                        pass
+                
+                return f"{base_greeting}\\n\\n{self._get_next_question()}"
             else:
-                return ("Hi there! I'm Luna, your personal loan application assistant. 😊 I will process your information and provide you with your loan qualification results. If you have any questions about the results, feel free to ask!\n\n"
+                base_prompt = ("Hi there! I'm Luna, your personal loan application assistant. 😊 I will process your information and provide you with your loan qualification results. If you have any questions about the results, feel free to ask!\n\n"
                        "**I will collect your information step by step** (not all at once) and you can **track your progress on the Progress Tracker** in the sidebar:\n"
                        "• **Step 1-2:** Personal Information (Age, Gender, etc.)\n"
                        "• **Step 3-5:** Employment Details (Work Class, Occupation, Hours)\n"
@@ -255,11 +266,22 @@ class LoanAssistant:
                        "• **Step 9-10:** Background & Relationship Status\n\n"
                        "**Watch the blue progress bar fill up as we complete each step!**\n\n"
                        "Would you like to start your loan application? Just say 'yes' or 'start' to begin!")
+                
+                # Enhance with LLM
+                if NATURAL_CONVERSATION_AVAILABLE:
+                    try:
+                        enhanced = enhance_response(base_prompt, {}, \"greeting_prompt\", high_anthropomorphism=True)
+                        if enhanced and len(enhanced.strip()) > 20:
+                            return enhanced
+                    except Exception:
+                        pass
+                
+                return base_prompt
         else:
             # Low anthropomorphism: Technical, concise, machine-like
             if any(keyword in user_input.lower() for keyword in greeting_keywords) or user_input.lower() in ['yes', 'y']:
                 self.conversation_state = ConversationState.COLLECTING_INFO
-                return ("AI Loan Assistant initialized. I will collect your information and process your loan qualification.\n\n"
+                base_greeting = ("AI Loan Assistant initialized. I will collect your information and process your loan qualification.\n\n"
                        "**Information collection process** (sequential):\n"
                        "• **Step 1-2:** Personal data (Age, Gender)\n"
                        "• **Step 3-5:** Employment data (Work Class, Occupation, Hours)\n"
@@ -267,9 +289,20 @@ class LoanAssistant:
                        "• **Step 7-8:** Financial data (Capital Gains/Losses)\n"
                        "• **Step 9-10:** Demographics & Relationship\n\n"
                        "Progress tracking available in sidebar.\n\n"
-                       "**Step 1:**\n\n" + self._get_next_question())
+                       "**Step 1:**")
+                
+                # Enhance with LLM for professional tone
+                if NATURAL_CONVERSATION_AVAILABLE:
+                    try:
+                        enhanced = enhance_response(base_greeting, {}, \"greeting\", high_anthropomorphism=False)
+                        if enhanced and len(enhanced.strip()) > 20:
+                            return f"{enhanced}\\n\\n{self._get_next_question()}"
+                    except Exception:
+                        pass
+                
+                return f"{base_greeting}\\n\\n{self._get_next_question()}"
             else:
-                return ("AI Loan Assistant system ready. I will collect your data and evaluate your loan qualification.\n\n"
+                base_prompt = ("AI Loan Assistant system ready. I will collect your data and evaluate your loan qualification.\n\n"
                        "**Data collection process** (sequential):\n"
                        "• **Step 1-2:** Personal data (Age, Gender)\n"
                        "• **Step 3-5:** Employment data (Work Class, Occupation, Hours)\n"
@@ -278,6 +311,17 @@ class LoanAssistant:
                        "• **Step 9-10:** Demographics & Relationship\n\n"
                        "Progress tracking available in sidebar.\n\n"
                        "Enter 'yes' or 'start' to begin data collection.")
+                
+                # Enhance with LLM for professional tone
+                if NATURAL_CONVERSATION_AVAILABLE:
+                    try:
+                        enhanced = enhance_response(base_prompt, {}, \"greeting_prompt\", high_anthropomorphism=False)
+                        if enhanced and len(enhanced.strip()) > 20:
+                            return enhanced
+                    except Exception:
+                        pass
+                
+                return base_prompt
 
     def _handle_info_collection(self, user_input: str) -> str:
         """Handle information collection phase"""
@@ -324,10 +368,14 @@ class LoanAssistant:
                     if next_question:
                         # Get step information for the next field
                         next_step = self.field_to_step.get(self.current_field, 0) if self.current_field else 0
-                        step_desc = self.step_descriptions.get(next_step, '')
-                        # Progress celebrations at milestones
-                        celebration = self._get_progress_celebration(completion)
-                        return f"✅ Perfect! {celebration} Progress: {completion:.1f}% complete.\n\n📋 **Step {next_step}/10:** {step_desc}\n{next_question}"
+                        # Use LLM-enhanced success message
+                        success_msg = self._get_success_message(
+                            self.current_field,
+                            str(getattr(self.application, self.current_field, '')),
+                            completion,
+                            next_step
+                        )
+                        return f"{success_msg}\n{next_question}"
                     else:
                         # Fallback if no next question
                         self.conversation_state = ConversationState.REVIEWING
@@ -643,12 +691,35 @@ class LoanAssistant:
             self.field_attempts[field] = 0  # Reset attempts on success
             
             warn = validation_result.get('warning')
-            msg = f"Got it! {field.replace('_', ' ').title()}: {normalized}"
+            
+            # Generate natural confirmation message using LLM
+            from ab_config import config
+            if config.show_anthropomorphic:
+                base_msg = f"Got it! {field.replace('_', ' ').title()}: {normalized}"
+            else:
+                base_msg = f"Confirmed. {field.replace('_', ' ').title()}: {normalized}"
+            
+            # Enhance with LLM for natural conversation
+            if NATURAL_CONVERSATION_AVAILABLE:
+                try:
+                    context = {'field': field, 'value': normalized}
+                    enhanced = enhance_response(
+                        base_msg,
+                        context,
+                        "field_confirmation",
+                        high_anthropomorphism=config.show_anthropomorphic
+                    )
+                    if enhanced and len(enhanced.strip()) > 5:
+                        base_msg = enhanced
+                except Exception:
+                    pass  # Keep base message
+            
             if warn:
-                msg += f"\n\n⚠️ {self._format_warning(field, warn)}"
+                base_msg += f"\n\n⚠️ {self._format_warning(field, warn)}"
+            
             return {
                 'success': True,
-                'message': msg
+                'message': base_msg
             }
             
         except Exception as e:
@@ -1497,6 +1568,49 @@ class LoanAssistant:
                 return "25% data fields collected."
             else:
                 return "Data received."
+    
+    def _get_success_message(self, field: str, normalized_value: str, completion: float, next_step: int = None) -> str:
+        """Generate natural success message using LLM enhancement"""
+        from ab_config import config
+        
+        # Build base message
+        field_friendly = field.replace('_', ' ').title()
+        celebration = self._get_progress_celebration(completion)
+        
+        if config.show_anthropomorphic:
+            base_msg = f"Perfect! {celebration} I've recorded your {field_friendly}: {normalized_value}.\n\nProgress: {completion:.1f}% complete."
+        else:
+            base_msg = f"Data received. {field_friendly}: {normalized_value}. Progress: {completion:.1f}% complete."
+        
+        # Add next step info if available
+        if next_step:
+            step_desc = self.step_descriptions.get(next_step, '')
+            if config.show_anthropomorphic:
+                base_msg += f"\n\n📋 **Step {next_step}/10:** {step_desc}"
+            else:
+                base_msg += f"\n\nStep {next_step}/10: {step_desc}"
+        
+        # Enhance with LLM for natural conversation
+        if NATURAL_CONVERSATION_AVAILABLE:
+            try:
+                context = {
+                    'field': field,
+                    'value': normalized_value,
+                    'completion': completion,
+                    'step': next_step
+                }
+                enhanced = enhance_response(
+                    base_msg,
+                    context,
+                    "success_confirmation",
+                    high_anthropomorphism=config.show_anthropomorphic
+                )
+                if enhanced and len(enhanced.strip()) > 10:
+                    return enhanced
+            except Exception:
+                pass  # Fall back to base message
+        
+        return base_msg
     
     def _get_smart_validation_message(self, field: str, user_input: str, attempt: int) -> str:
         """Provide smart, context-aware validation messages"""
