@@ -1642,8 +1642,8 @@ class LoanAssistant:
                     # Define expected format for each field
                     expected_formats = {
                         'age': "a number between 17-90, e.g., '25', '30', or '45'",
-                        'workclass': "one of: Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked, or '?'",
-                        'education': "education level like 'HS-grad', 'Bachelors', 'Masters', 'Some-college', etc.",
+                        'workclass': "employment type (we support fuzzy matching! e.g., 'private', 'self-employed', 'government', etc.)",
+                        'education': "education level (we support fuzzy matching! e.g., 'bachelor', 'phd', 'masters', 'high school', etc. - be flexible with user input)",
                         'sex': "'Male' or 'Female'",
                         'marital_status': "one of: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', 'Married-AF-spouse'",
                         'occupation': "a job category or '?' if uncertain",
@@ -1695,8 +1695,8 @@ class LoanAssistant:
                     # Define expected format for each field
                     expected_formats = {
                         'age': "a number between 17-90, e.g., '25', '30', or '45'",
-                        'workclass': "one of: Private, Self-emp-not-inc, Self-emp-inc, Federal-gov, Local-gov, State-gov, Without-pay, Never-worked, or '?'",
-                        'education': "education level like 'HS-grad', 'Bachelors', 'Masters', 'Some-college', etc.",
+                        'workclass': "employment type (fuzzy matching supported: e.g., 'private', 'self-employed', 'government', etc.)",
+                        'education': "education level (fuzzy matching supported: e.g., 'bachelor', 'phd', 'masters', 'high school', etc. - flexible input accepted)",
                         'sex': "'Male' or 'Female'",
                         'marital_status': "one of: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', 'Married-AF-spouse'",
                         'occupation': "a job category or '?' if uncertain",
