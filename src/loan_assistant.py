@@ -249,13 +249,13 @@ class LoanAssistant:
                 # Enhance greeting with LLM
                 if NATURAL_CONVERSATION_AVAILABLE:
                     try:
-                        enhanced = enhance_response(base_greeting, {}, \"greeting\", high_anthropomorphism=True)
+                        enhanced = enhance_response(base_greeting, {}, "greeting", high_anthropomorphism=True)
                         if enhanced and len(enhanced.strip()) > 20:
-                            return f"{enhanced}\\n\\n{self._get_next_question()}"
+                            return f"{enhanced}\n\n{self._get_next_question()}"
                     except Exception:
                         pass
                 
-                return f"{base_greeting}\\n\\n{self._get_next_question()}"
+                return f"{base_greeting}\n\n{self._get_next_question()}"
             else:
                 base_prompt = ("Hi there! I'm Luna, your personal loan application assistant. 😊 I will process your information and provide you with your loan qualification results. If you have any questions about the results, feel free to ask!\n\n"
                        "**I will collect your information step by step** (not all at once) and you can **track your progress on the Progress Tracker** in the sidebar:\n"
@@ -270,7 +270,7 @@ class LoanAssistant:
                 # Enhance with LLM
                 if NATURAL_CONVERSATION_AVAILABLE:
                     try:
-                        enhanced = enhance_response(base_prompt, {}, \"greeting_prompt\", high_anthropomorphism=True)
+                        enhanced = enhance_response(base_prompt, {}, "greeting_prompt", high_anthropomorphism=True)
                         if enhanced and len(enhanced.strip()) > 20:
                             return enhanced
                     except Exception:
@@ -294,13 +294,13 @@ class LoanAssistant:
                 # Enhance with LLM for professional tone
                 if NATURAL_CONVERSATION_AVAILABLE:
                     try:
-                        enhanced = enhance_response(base_greeting, {}, \"greeting\", high_anthropomorphism=False)
+                        enhanced = enhance_response(base_greeting, {}, "greeting", high_anthropomorphism=False)
                         if enhanced and len(enhanced.strip()) > 20:
-                            return f"{enhanced}\\n\\n{self._get_next_question()}"
+                            return f"{enhanced}\n\n{self._get_next_question()}"
                     except Exception:
                         pass
                 
-                return f"{base_greeting}\\n\\n{self._get_next_question()}"
+                return f"{base_greeting}\n\n{self._get_next_question()}"
             else:
                 base_prompt = ("AI Loan Assistant system ready. I will collect your data and evaluate your loan qualification.\n\n"
                        "**Data collection process** (sequential):\n"
@@ -315,7 +315,7 @@ class LoanAssistant:
                 # Enhance with LLM for professional tone
                 if NATURAL_CONVERSATION_AVAILABLE:
                     try:
-                        enhanced = enhance_response(base_prompt, {}, \"greeting_prompt\", high_anthropomorphism=False)
+                        enhanced = enhance_response(base_prompt, {}, "greeting_prompt", high_anthropomorphism=False)
                         if enhanced and len(enhanced.strip()) > 20:
                             return enhanced
                     except Exception:
