@@ -334,6 +334,10 @@ class LoanAssistant:
         if user_input.lower() in ['review', 'check', 'status']:
             return self._show_progress()
         
+        # Handle '?' - provide copyable list of valid options
+        if user_input.strip() == '?' and self.current_field:
+            return self._get_copyable_options(self.current_field)
+        
         if user_input.lower() in ['help', 'help me', 'what do i do', 'stuck', 'confused']:
             if self.current_field:
                 if config.show_anthropomorphic:
@@ -680,7 +684,7 @@ class LoanAssistant:
                 
                 # Use smart validation message instead of generic one
                 if self.field_attempts[field] >= 3:
-                    err = f"I'm having trouble understanding your {field.replace('_', ' ')}. Let me provide some specific examples to help:\n\n{self._get_field_help(field)}\n\nOr you can say 'help' for more guidance."
+                    err = f"I'm having trouble understanding your {field.replace('_', ' ')}. Let me provide some specific examples to help:\n\n{self._get_field_help(field)}\n\nOr type **'?'** to see all valid options you can copy-paste!"
                 else:
                     err = self._get_smart_validation_message(field, user_input, self.field_attempts[field])
                 
@@ -1398,15 +1402,26 @@ class LoanAssistant:
         for field in self.field_order:
             value = getattr(self.application, field)
             if value is not None:
-                # Get friendly names for both field and value
-                friendly_field = get_friendly_feature_name(field).replace(field.replace('_', ' ').title(), field.replace('_', ' ').title())
-                # For categorical values, try to get friendly name
-                friendly_value = get_friendly_feature_name(f"{field}_{value}")
-                # If no mapping found, use original value
-                if friendly_value.startswith(field.title()) or friendly_value == f"{field}_{value}":
-                    friendly_value = value
+                # Get friendly field name
+                friendly_field = field.replace('_', ' ').title()
                 
-                summary += f"• {field.replace('_', ' ').title()}: {friendly_value}\n"
+                # Format value based on field type
+                if field in ['capital_gain', 'capital_loss']:
+                    friendly_value = f"${value:,}" if isinstance(value, (int, float)) else str(value)
+                elif field == 'hours_per_week':
+                    friendly_value = f"{value} hours/week"
+                elif field == 'age':
+                    friendly_value = f"{value} years old"
+                elif field in ['workclass', 'education', 'marital_status', 'occupation', 'relationship', 'race', 'native_country']:
+                    # For categorical values, try to get friendly name from FEATURE_DISPLAY_NAMES
+                    friendly_value = get_friendly_feature_name(f"{field}_{value}")
+                    # If no mapping found, use original value
+                    if friendly_value.startswith(field.title()) or friendly_value == f"{field}_{value}":
+                        friendly_value = str(value)
+                else:
+                    friendly_value = str(value)
+                
+                summary += f"• {friendly_field}: {friendly_value}\n"
         
         return summary
 
@@ -1652,17 +1667,17 @@ class LoanAssistant:
             # High anthropomorphism: Warm, friendly, understanding
             field_examples = {
                 'age': "I need a number for your age, please! 😊 For example: '25', '30', or '45'",
-                'workclass': "No worries! Please choose from: Private sector, Self-employed, Federal/Local/State government, etc., or '?' if you're not sure",
-                'education': "I'd love to know your education level! Try: 'High school graduate', 'Bachelor's', 'Master's', 'Some college', etc. Feel free to click the buttons below for all options! 📚",
+                'workclass': "No worries! Please choose from: Private sector, Self-employed, Federal/Local/State government, etc.\n\n💡 **Type '?' to see all valid options!**",
+                'education': "I'd love to know your education level! Try: 'High school graduate', 'Bachelor's', 'Master's', 'Some college', etc.\n\n💡 **Type '?' to see all valid options you can copy-paste!** 📚",
                 'sex': "Please let me know: 'Male' or 'Female' - these are the only categories in my dataset, I apologize for the limitation",
-                'marital_status': "I need your marital status! Please choose: 'Married', 'Never married', 'Divorced', 'Separated', 'Widowed', etc.",
-                'occupation': "Tell me about your job! Please pick from the available categories, or '?' if you're not sure. Click the buttons below for all options! 💼",
+                'marital_status': "I need your marital status! Please choose: 'Married', 'Never married', 'Divorced', 'Separated', 'Widowed', etc.\n\n💡 **Type '?' for the full list!**",
+                'occupation': "Tell me about your job! Please pick from the available categories.\n\n💡 **Type '?' to see all valid options you can copy-paste!** 💼",
                 'hours_per_week': "How many hours do you work per week? Just give me a number like: '40', '35', or '50' ⏰",
                 'capital_gain': "I need the amount of capital gains, or just '0' if you don't have any. For example: '5000' or '0'",
                 'capital_loss': "Please tell me your capital losses, or '0' if none. For example: '2000' or '0'",
-                'race': "Please help me understand your race/ethnicity. Choose from: White, Asian-Pacific Islander, Indigenous American, Black, or Other",
-                'native_country': "Which country are you from? I support all 42 countries in my training data! 🌍 Click the buttons below or just type the country name.",
-                'relationship': "What's your household relationship? Please choose from: Husband, Wife, Own-child, Not in family, Other relative, or Unmarried"
+                'race': "Please help me understand your race/ethnicity.\n\n💡 **Type '?' to see all valid options!**",
+                'native_country': "Which country are you from? I support all 42 countries in my training data! 🌍\n\n💡 **Type '?' to see the full list!**",
+                'relationship': "What's your household relationship?\n\n💡 **Type '?' to see all valid options!**"
             }
             
             base_msg = f"Oops! I didn't quite catch that - '{user_input}' doesn't seem right for {field.replace('_', ' ')}. 🤔"
@@ -1704,17 +1719,17 @@ class LoanAssistant:
             # Fallback: Hardcoded technical messages if LLM not available
             field_examples = {
                 'age': "I need a number for your age. For example: '25', '30', or '45'",
-                'workclass': "Please choose from: Private sector, Self-employed, Federal/Local/State government, etc., or '?' if unknown",
-                'education': "Please specify your education level like: 'High school graduate', 'Bachelor's', 'Master's', 'Some college', etc. Click the buttons below for all options!",
+                'workclass': "Please choose from the available employment types.\n\nType '?' to see all valid options.",
+                'education': "Please specify your education level.\n\nType '?' to see all valid options you can copy-paste.",
                 'sex': "Please specify 'Male' or 'Female' - these are the only categories in the dataset I was trained on",
-                'marital_status': "Please choose: 'Married', 'Never married', 'Divorced', 'Separated', 'Widowed', etc.",
-                'occupation': "Please describe your job from the available categories, or '?' if uncertain. Click the buttons below for all options!",
+                'marital_status': "Please choose from the available marital status options.\n\nType '?' for the full list.",
+                'occupation': "Please describe your job from the available categories.\n\nType '?' to see all valid options you can copy-paste.",
                 'hours_per_week': "I need the number of hours you work per week. For example: '40', '35', or '50'",
                 'capital_gain': "Enter the amount of capital gains, or '0' if none. For example: '5000' or '0'",
                 'capital_loss': "Enter the amount of capital losses, or '0' if none. For example: '2000' or '0'",
-                'race': "Please choose from: White, Asian-Pacific Islander, Indigenous American, Black, or Other",
-                'native_country': "Please specify your country - I support all 42 countries in my training data! Click the buttons below or type the country name.",
-                'relationship': "Please choose from: Husband, Wife, Own-child, Not in family, Other relative, or Unmarried"
+                'race': "Please choose from the available race/ethnicity options.\n\nType '?' to see all valid options.",
+                'native_country': "Please specify your country from the 42 supported countries.\n\nType '?' to see the full list.",
+                'relationship': "Please choose from the available relationship options.\n\nType '?' for the full list."
             }
             
             base_msg = f"I didn't quite understand '{user_input}' for {field.replace('_', ' ')}."
@@ -1724,6 +1739,41 @@ class LoanAssistant:
                 return f"{base_msg}\n\n💡 **Tip:** {help_msg}\n\nTry again, or say 'help' for more options."
             else:
                 return f"{base_msg} {help_msg}"
+    
+    def _get_copyable_options(self, field: str) -> str:
+        """Provide copyable list of valid options for categorical fields"""
+        from ab_config import config
+        
+        if field not in self.allowed_values:
+            # Numeric field - provide range info
+            if field in self.validation_rules:
+                rules = self.validation_rules[field]
+                min_val = rules.get('min', 'any')
+                max_val = rules.get('max', 'any')
+                if config.show_anthropomorphic:
+                    return f"📋 **{field.replace('_', ' ').title()}** is a number field.\n\nJust enter a value between **{min_val}** and **{max_val}**.\n\nFor example: `{(min_val + max_val) // 2 if isinstance(min_val, int) and isinstance(max_val, int) else '40'}`"
+                else:
+                    return f"**{field.replace('_', ' ').title()}:** Numeric field.\n\nRange: {min_val} to {max_val}\n\nExample: `{(min_val + max_val) // 2 if isinstance(min_val, int) and isinstance(max_val, int) else '40'}`"
+        
+        # Categorical field - provide full list
+        options = self.allowed_values[field]
+        
+        if config.show_anthropomorphic:
+            header = f"📋 **Here are all the valid options for {field.replace('_', ' ')}:**\n\n"
+            header += "💡 **Tip:** You can copy-paste any of these exactly:\n\n"
+        else:
+            header = f"**Valid options for {field.replace('_', ' ')}:**\n\n"
+            header += "Copy-paste one of these options:\n\n"
+        
+        # Format options in a clean, copyable list
+        options_list = "\n".join([f"• `{opt}`" for opt in options])
+        
+        if config.show_anthropomorphic:
+            footer = "\n\n✨ **Or just describe it naturally** - I can understand variations like 'private', 'bachelor', 'single', etc.!"
+        else:
+            footer = "\n\nNote: Natural language variations (e.g., 'private', 'bachelor', 'single') are also accepted."
+        
+        return header + options_list + footer
     
     def _get_field_help(self, field: str) -> str:
         """Provide detailed help for specific fields"""
