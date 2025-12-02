@@ -348,6 +348,8 @@ class LoanAssistant:
         
         # Process the current field
         if self.current_field:
+            # Store the field we're processing BEFORE it gets changed
+            completed_field = self.current_field
             result = self._process_field_input(self.current_field, user_input)
             if result['success']:
                 completion = self.application.calculate_completion()
@@ -366,12 +368,14 @@ class LoanAssistant:
                 else:
                     next_question = self._get_next_question()
                     if next_question:
-                        # Get step information for the next field
+                        # Get step information for the NEXT field (self.current_field is now updated)
                         next_step = self.field_to_step.get(self.current_field, 0) if self.current_field else 0
-                        # Use LLM-enhanced success message
+                        # Get the value that was just set for the COMPLETED field
+                        completed_value = str(getattr(self.application, completed_field, ''))
+                        # Use LLM-enhanced success message with the correct completed field
                         success_msg = self._get_success_message(
-                            self.current_field,
-                            str(getattr(self.application, self.current_field, '')),
+                            completed_field,
+                            completed_value,
                             completion,
                             next_step
                         )
