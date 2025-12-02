@@ -1641,16 +1641,16 @@ class LoanAssistant:
                     # Define expected format for each field
                     expected_formats = {
                         'age': "a number between 17-90, e.g., '25', '30', or '45'",
-                        'workclass': "employment type (we support fuzzy matching! e.g., 'private', 'self-employed', 'government', etc.)",
-                        'education': "education level (we support fuzzy matching! e.g., 'bachelor', 'phd', 'masters', 'high school', etc. - be flexible with user input)",
+                        'workclass': "employment type (we support fuzzy matching! e.g., 'private', 'self-employed', 'government', etc. - or just '?' if unsure)",
+                        'education': "education level (we support fuzzy matching! e.g., 'bachelor', 'phd', 'masters', 'high school', etc. - be flexible with user input, or '?' if unsure)",
                         'sex': "'Male' or 'Female'",
                         'marital_status': "one of: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', 'Married-AF-spouse'",
-                        'occupation': "a job category or '?' if uncertain",
+                        'occupation': "a job category (or just '?' if you're not sure)",
                         'hours_per_week': "number of hours like '40', '35', or '50'",
                         'capital_gain': "amount like '5000' or '0' if none",
                         'capital_loss': "amount like '2000' or '0' if none",
                         'race': "one of: Black, Asian-Pac-Islander, Amer-Indian-Eskimo, White, or Other",
-                        'native_country': "a country name from the 42 supported countries",
+                        'native_country': "a country name from the 42 supported countries (or '?' if unsure)",
                         'relationship': "one of: Husband, Wife, Own-child, Not-in-family, Other-relative, Unmarried"
                     }
                     
@@ -1694,16 +1694,16 @@ class LoanAssistant:
                     # Define expected format for each field
                     expected_formats = {
                         'age': "a number between 17-90, e.g., '25', '30', or '45'",
-                        'workclass': "employment type (fuzzy matching supported: e.g., 'private', 'self-employed', 'government', etc.)",
-                        'education': "education level (fuzzy matching supported: e.g., 'bachelor', 'phd', 'masters', 'high school', etc. - flexible input accepted)",
+                        'workclass': "employment type (fuzzy matching supported: e.g., 'private', 'self-employed', 'government', etc. - or '?' if unsure)",
+                        'education': "education level (fuzzy matching supported: e.g., 'bachelor', 'phd', 'masters', 'high school', etc. - flexible input accepted, or '?' if unsure)",
                         'sex': "'Male' or 'Female'",
                         'marital_status': "one of: 'Married-civ-spouse', 'Never-married', 'Divorced', 'Separated', 'Widowed', 'Married-spouse-absent', 'Married-AF-spouse'",
-                        'occupation': "a job category or '?' if uncertain",
+                        'occupation': "a job category (or '?' if not sure)",
                         'hours_per_week': "number of hours like '40', '35', or '50'",
                         'capital_gain': "amount like '5000' or '0' if none",
                         'capital_loss': "amount like '2000' or '0' if none",
                         'race': "one of: Black, Asian-Pac-Islander, Amer-Indian-Eskimo, White, or Other",
-                        'native_country': "a country name from the 42 supported countries",
+                        'native_country': "a country name from the 42 supported countries (or '?' if unsure)",
                         'relationship': "one of: Husband, Wife, Own-child, Not-in-family, Other-relative, Unmarried"
                     }
                     
