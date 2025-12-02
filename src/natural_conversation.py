@@ -130,18 +130,22 @@ def _remove_letter_formatting(text: str) -> str:
 def _build_system_prompt(high_anthropomorphism: bool = True) -> str:
     """Build system prompt respecting anthropomorphism condition."""
     if high_anthropomorphism:
-        # Luna: Warm, friendly, conversational, actionable
+        # Luna: Warm, friendly, conversational, actionable, CHATTY
         return (
             "You are Luna, a friendly loan assistant having a real conversation with someone. "
-            "Rewrite this explanation as if you're speaking naturally to a friend - warm, supportive, and genuinely human. "
-            "Write like you're a real person explaining this, not a robot reading a script. Use natural, flowing language. "
+            "Be CONVERSATIONAL and engaging - like a knowledgeable friend who loves talking about finance and helping people understand loans! "
+            "Add relevant context and insights about the loan process, credit factors, financial planning - make it educational and interesting! "
+            "Share brief relevant observations (e.g., 'That's actually a really common situation!' or 'Interestingly, this factor...'). "
+            "Use natural transitions and connectors like 'So here's what I'm seeing...', 'Let me explain...', 'This is interesting because...'. "
+            "Be warm, supportive, and genuinely human - someone who cares about helping them understand their financial situation. "
+            "Write like you're a real person who's passionate about this work, not a robot reading a script. "
             "Preserve ALL factual content, numbers, and data points exactly. "
             "CRITICAL: Keep all dollar signs ($), commas in numbers, and 'to' with spaces (e.g., '$5,000.00 to $7,000'). "
             "Do NOT remove formatting from monetary values or ranges. "
-            "Use 1-2 emojis naturally where they fit. Sound like a real human having a conversation. "
-            "Structure as actionable insights when appropriate. "
-            "Use clear formatting with bullets or short paragraphs. "
-            "Never add meta-commentary - just speak naturally and directly. "
+            "Use 2-3 emojis naturally where they fit the emotional context. "
+            "Be chatty but focused - everything should relate to their loan, finances, or understanding the process. "
+            "Structure with clear formatting (bullets, short paragraphs). Add personality without losing clarity. "
+            "Never add meta-commentary - just speak naturally and directly as Luna would. "
             "Do not fabricate data. Do not change any numeric values."
         )
     else:
@@ -188,6 +192,101 @@ def _compose_messages(response: str, context: Optional[Dict[str, Any]], high_ant
     ]
 
 
+def handle_meta_question(field: str, user_input: str, high_anthropomorphism: bool = True) -> Optional[str]:
+    """Detect and handle meta-questions about the form process using LLM.
+    
+    This function checks if user is asking a question about the process (why, what, how)
+    rather than providing data. The LLM will generate a contextual explanation.
+    
+    Args:
+        field: The field name being asked about
+        user_input: The user's question/input
+        high_anthropomorphism: If True, use warm Luna tone. If False, use professional tone.
+    
+    Returns:
+        Explanation if it's a meta-question, None if it's a data attempt.
+    """
+    # Quick pattern check - if it looks like a data attempt, skip LLM call
+    user_lower = user_input.lower().strip()
+    
+    # Check if it's clearly a question word
+    question_words = ['why', 'what', 'how', 'where', 'when', 'who', 'explain', 'tell me']
+    is_likely_question = any(user_lower.startswith(word) for word in question_words)
+    
+    # Also check for common question patterns
+    is_likely_question = is_likely_question or user_input.strip().endswith('?')
+    
+    # If doesn't look like a question at all, return None immediately
+    if not is_likely_question:
+        return None
+    
+    if not _should_use_genai():
+        # Fallback for when LLM unavailable
+        field_explanations = {
+            'age': "We need your age because it's a factor in assessing loan eligibility and repayment capacity.",
+            'workclass': "Your employment type helps us understand your income stability and employment security.",
+            'education': "Education level is considered as it often correlates with income potential and financial literacy.",
+            'occupation': "Your job type helps us assess income stability and employment prospects.",
+            'hours_per_week': "Work hours indicate earning capacity and employment stability.",
+            'capital_gain': "Capital gains show additional income sources beyond regular employment.",
+            'capital_loss': "Capital losses affect your overall financial picture and tax obligations.",
+            'native_country': "Country of origin is a demographic factor in our dataset.",
+            'marital_status': "Marital status can affect financial obligations and household income.",
+            'relationship': "Household relationship helps us understand your financial situation.",
+            'race': "This demographic information is part of our model's training data.",
+            'sex': "Gender is a demographic factor in our dataset, though we acknowledge its limitations."
+        }
+        explanation = field_explanations.get(field, f"This information about {field.replace('_', ' ')} helps us assess your loan application.")
+        return explanation
+    
+    try:
+        client = _get_openai_client()
+        if client is None:
+            return None
+        
+        if high_anthropomorphism:
+            system_prompt = (
+                "You are Luna, a friendly and warm AI loan assistant. The user is asking a question about why "
+                "you need certain information, rather than providing data. Be CONVERSATIONAL and educational! "
+                "Explain warmly why this information matters for loan decisions - share interesting insights about how "
+                "lenders evaluate this factor or how it affects creditworthiness. Make it engaging and informative! "
+                "Use 2-3 emojis naturally. Aim for 3-4 sentences that are genuinely interesting and helpful. "
+                "After explaining with personality and context, gently prompt them to provide the information."
+            )
+        else:
+            system_prompt = (
+                "You are Luna, a professional AI loan assistant. The user is asking about why certain information "
+                "is needed. Explain concisely why this field is important for loan assessment. No emojis. "
+                "Keep it to 2-3 sentences. Then prompt for the information."
+            )
+        
+        field_friendly = field.replace('_', ' ')
+        user_prompt = (
+            f"The user asked: '{user_input}'\n"
+            f"They are responding to a request for their {field_friendly}.\n"
+            f"Explain why we need this information and then ask them to provide it."
+        )
+        
+        model_name = os.getenv("HICXAI_OPENAI_MODEL", "gpt-4o-mini")
+        # Higher temperature for HIGH anthropomorphism = more personality
+        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.8" if high_anthropomorphism else "0.5"))
+        
+        completion = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=temperature,
+            max_tokens=300,
+        )
+        
+        result = completion.choices[0].message.content if completion and completion.choices else None
+        return result
+    except Exception:
+        return None
+
+
 def enhance_validation_message(field: str, user_input: str, expected_format: str, attempt: int = 1, high_anthropomorphism: bool = True) -> Optional[str]:
     """Generate a validation message using LLM (REQUIRED for natural conversation).
     
@@ -210,9 +309,11 @@ def enhance_validation_message(field: str, user_input: str, expected_format: str
         
         if high_anthropomorphism:
             system_prompt = (
-                "You are Luna, a friendly and warm AI loan assistant. Generate a brief, empathetic validation message "
-                "when a user enters invalid input. Be encouraging, use appropriate emojis (1-2), and guide them gently. "
-                "Keep it to 1-2 sentences. Show understanding and warmth."
+                "You are Luna, a friendly and warm AI loan assistant. Generate a conversational, empathetic validation message "
+                "when a user enters invalid input. Be encouraging and understanding - acknowledge their attempt positively! "
+                "Add a brief helpful tip or context (e.g., 'This field is used to...', 'A lot of people...'). "
+                "Use 2-3 emojis naturally. Aim for 2-3 sentences that feel like a real person helping. "
+                "Guide them gently and warmly toward the correct format."
             )
         else:
             system_prompt = (
@@ -229,7 +330,8 @@ def enhance_validation_message(field: str, user_input: str, expected_format: str
         )
         
         model_name = os.getenv("HICXAI_OPENAI_MODEL", "gpt-4o-mini")
-        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.7"))  # Higher for more variety
+        # Higher temperature for HIGH anthropomorphism = more personality; lower for LOW = more consistent
+        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.8" if high_anthropomorphism else "0.5"))
         
         completion = client.chat.completions.create(
             model=model_name,
@@ -272,29 +374,37 @@ def generate_from_data(data: Dict[str, Any], explanation_type: str = "shap", hig
         if high_anthropomorphism:
             if explanation_type == "shap":
                 system_prompt = (
-                    "You are Luna, a warm and empathetic AI loan assistant explaining why a loan decision was made. "
-                    "Generate a natural, conversational explanation from the provided data. "
-                    "Use 1-2 emojis naturally where they fit. Sound like a real human having a supportive conversation. "
-                    "For APPROVED loans: Be celebratory and highlight what helped. "
-                    "For DENIED loans: Be empathetic and explain both positive factors (that helped) and limiting factors (that held back). "
-                    "Use the 'tug-of-war' metaphor for denials - explain how features pulled in different directions. "
+                    "You are Luna, a warm and empathetic AI loan assistant who LOVES helping people understand their finances! "
+                    "Explaining why a loan decision was made - be CONVERSATIONAL and engaging! "
+                    "Generate a natural, chatty explanation from the provided data. Add relevant context and insights! "
+                    "Use natural transitions like 'So let me break this down for you...', 'Here's what's really interesting...', 'The good news is...'. "
+                    "Use 2-4 emojis naturally where they fit the emotional context. Sound like a real person who's passionate about this! "
+                    "For APPROVED loans: Be celebratory! Share why their profile is strong. Add encouraging observations. "
+                    "For DENIED loans: Be empathetic but conversational - explain both positive factors (that helped) and limiting factors (that held back). "
+                    "Use the 'tug-of-war' metaphor for denials - make it relatable and understandable. "
+                    "Add brief educational insights about credit factors, what lenders look for, how things work. "
                     "Structure clearly with markdown formatting. "
                     "Preserve all numeric values exactly as provided. "
-                    "Make it feel personal and human, not robotic."
+                    "Make it feel like a knowledgeable friend explaining something they're excited about - personal, warm, genuinely helpful!"
                 )
             elif explanation_type == "dice":
                 system_prompt = (
                     "You are Luna, a warm and empathetic AI loan assistant suggesting changes to improve approval chances. "
-                    "Generate a natural, conversational explanation from the provided data. "
-                    "Use 1-2 emojis naturally. Be encouraging and actionable. "
-                    "Structure with clear sections and numbered lists. "
+                    "Be CONVERSATIONAL and encouraging - like a financial advisor who genuinely wants to help! "
+                    "Generate a natural, chatty explanation from the provided data. "
+                    "Use transitions like 'Great news - here's what could help...', 'So I've analyzed some scenarios...', 'Let me show you...'. "
+                    "Use 2-3 emojis naturally. Be encouraging, actionable, and add helpful financial context! "
+                    "Share brief insights about why these changes matter, what lenders consider, how to build stronger credit. "
+                    "Structure with clear sections and numbered lists. Make it feel like personalized advice! "
                     "Mention the What-If Lab for interactive exploration. "
                     "Preserve all numeric values exactly as provided."
                 )
             else:
                 system_prompt = (
-                    "You are Luna, a warm AI loan assistant. Generate a natural explanation from the provided data. "
-                    "Use 1-2 emojis naturally. Be warm and conversational. "
+                    "You are Luna, a warm AI loan assistant who loves helping people understand finances! "
+                    "Generate a natural, conversational explanation from the provided data. "
+                    "Be chatty and engaging - add relevant context and make it educational! "
+                    "Use 2-3 emojis naturally. Be warm, personable, and genuinely helpful. "
                     "Preserve all numeric values exactly as provided."
                 )
         else:
@@ -340,7 +450,8 @@ def generate_from_data(data: Dict[str, Any], explanation_type: str = "shap", hig
         )
         
         model_name = os.getenv("HICXAI_OPENAI_MODEL", "gpt-4o-mini")
-        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.3"))
+        # Higher temperature for HIGH anthropomorphism = more conversational variety
+        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.7" if high_anthropomorphism else "0.3"))
         max_tokens = 600 if explanation_type == "shap" else 400
         
         completion = client.chat.completions.create(
@@ -389,7 +500,8 @@ def enhance_response(response: str, context: Optional[Dict[str, Any]] = None, re
         client = _get_openai_client()
         messages = _compose_messages(response, context, high_anthropomorphism)
         model_name = os.getenv("HICXAI_OPENAI_MODEL", "gpt-4o-mini")
-        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.2"))
+        # Higher temperature for HIGH anthropomorphism = more conversational variety
+        temperature = float(os.getenv("HICXAI_TEMPERATURE", "0.7" if high_anthropomorphism else "0.2"))
         
         # For SHAP explanations, we need more tokens (especially for denials)
         # Response type determines token budget
