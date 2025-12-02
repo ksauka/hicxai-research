@@ -844,9 +844,17 @@ def explain_with_anchor(agent):
         rules_friendly = []
         rules_technical = []
         
-        if current_instance:
+        if current_instance is not None and len(current_instance) > 0:
+            # Convert Series to dict for safe .get() access
+            if hasattr(current_instance, 'to_dict'):
+                instance_dict = current_instance.to_dict()
+            elif isinstance(current_instance, dict):
+                instance_dict = current_instance
+            else:
+                instance_dict = dict(current_instance) if current_instance is not None else {}
+            
             # Age rule
-            age = current_instance.get('age', 0)
+            age = instance_dict.get('age', 0)
             if age > 35:
                 friendly = get_friendly_feature_name('age')
                 rules_friendly.append(f"Your {friendly.lower()} ({age} years old)")
@@ -857,8 +865,8 @@ def explain_with_anchor(agent):
                 rules_technical.append(f"age < 25 (value: {age})")
             
             # Education rule
-            education_num = current_instance.get('education_num', 0)
-            education = current_instance.get('education', 'Unknown')
+            education_num = instance_dict.get('education_num', 0)
+            education = instance_dict.get('education', 'Unknown')
             if education_num >= 13:
                 friendly = get_friendly_feature_name('education_num')
                 rules_friendly.append(f"Your {friendly.lower()} ({education})")
@@ -869,7 +877,7 @@ def explain_with_anchor(agent):
                 rules_technical.append(f"education_num < 9 (less than HS)")
             
             # Hours rule
-            hours = current_instance.get('hours_per_week', 0)
+            hours = instance_dict.get('hours_per_week', 0)
             if hours >= 40:
                 friendly = get_friendly_feature_name('hours_per_week')
                 rules_friendly.append(f"Your {friendly.lower()} ({hours} hours per week)")
@@ -880,14 +888,14 @@ def explain_with_anchor(agent):
                 rules_technical.append(f"hours_per_week < 30 (value: {hours})")
             
             # Marital status rule
-            marital = current_instance.get('marital_status', '')
+            marital = instance_dict.get('marital_status', '')
             if 'Married' in marital:
                 friendly = get_friendly_feature_name('marital_status')
                 rules_friendly.append(f"Your {friendly.lower()} ({marital})")
                 rules_technical.append(f"marital_status = '{marital}'")
             
             # Capital gain rule
-            capital_gain = current_instance.get('capital_gain', 0)
+            capital_gain = instance_dict.get('capital_gain', 0)
             if capital_gain > 5000:
                 friendly = get_friendly_feature_name('capital_gain')
                 rules_friendly.append(f"Your {friendly.lower()} (${capital_gain:,})")
@@ -898,7 +906,7 @@ def explain_with_anchor(agent):
                 rules_technical.append(f"capital_gain > 0 (value: {capital_gain})")
             
             # Occupation rule
-            occupation = current_instance.get('occupation', '')
+            occupation = instance_dict.get('occupation', '')
             if occupation:
                 if any(x in occupation for x in ['Exec', 'Prof', 'Managerial']):
                     friendly = get_friendly_feature_name('occupation')
