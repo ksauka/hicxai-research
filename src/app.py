@@ -114,9 +114,10 @@ if st.session_state.get("_returned"):
         st.markdown(f'<meta http-equiv="refresh" content="0;url={final}">', unsafe_allow_html=True)
         st.stop()
 
-# set the 3-minute deadline once
+# set the 3-minute deadline once and track start time
 if "deadline_ts" not in st.session_state:
     st.session_state.deadline_ts = time.time() + 180
+    st.session_state.start_time = time.time()  # Track when user started
 
 # fire auto-return when time is up (exactly once)
 if time.time() >= st.session_state.deadline_ts:
@@ -750,23 +751,33 @@ elif current_state == 'collecting_info':
             st_rerun()
 
 elif current_state == 'complete':
-    col1, col2 = st.columns(2)
-    with col1:
+    # Only show What-If button in Condition 4 (HIGH anthropomorphism + counterfactual)
+    if config.show_counterfactual and config.show_anthropomorphic:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Explain Decision", key="quick_explain", use_container_width=True):
+                if logger:
+                    logger.log_interaction("explanation_request", {"type": "decision_explanation"})
+                response = st.session_state.loan_assistant.handle_message("explain")
+                st.session_state.chat_history.append(("explain", response))
+                st_rerun()
+        with col2:
+            if st.button("🔧 What If Analysis", key="quick_whatif", use_container_width=True):
+                # Turn on What‑if Lab and prompt guidance
+                try:
+                    st.session_state.loan_assistant.show_what_if_lab = True
+                except Exception:
+                    pass
+                response = "What‑if Lab enabled in the sidebar. Adjust Age, Hours, Education, or Occupation to see how the probability changes."
+                st.session_state.chat_history.append(("what if analysis", response))
+                st_rerun()
+    else:
+        # Show only Explain button for other conditions
         if st.button("Explain Decision", key="quick_explain", use_container_width=True):
             if logger:
                 logger.log_interaction("explanation_request", {"type": "decision_explanation"})
             response = st.session_state.loan_assistant.handle_message("explain")
             st.session_state.chat_history.append(("explain", response))
-            st_rerun()
-    with col2:
-        if st.button("🔧 What If Analysis", key="quick_whatif", use_container_width=True):
-            # Turn on What‑if Lab and prompt guidance
-            try:
-                st.session_state.loan_assistant.show_what_if_lab = True
-            except Exception:
-                pass
-            response = "What‑if Lab enabled in the sidebar. Adjust Age, Hours, Education, or Occupation to see how the probability changes."
-            st.session_state.chat_history.append(("what if analysis", response))
             st_rerun()
 
 # Clickable Options for Current Field (if collecting info)
@@ -928,10 +939,17 @@ if current_state == 'complete' and len(st.session_state.chat_history) > 5:
                     f.write(json.dumps(feedback_data, indent=2))
     
     # Show "Continue to survey" button OUTSIDE the form (alternate after feedback)
+    # Only show after 2 minutes to ensure user engagement
     if st.session_state.get("feedback_submitted", False) and st.session_state.get("return_raw"):
-        st.markdown("---")
-        if st.button("✅ Continue to survey", type="primary", use_container_width=True, key="feedback_return"):
-            back_to_survey()
+        elapsed_time = time.time() - st.session_state.get("start_time", time.time())
+        if elapsed_time >= 120:  # 2 minutes = 120 seconds
+            st.markdown("---")
+            if st.button("✅ Continue to survey", type="primary", use_container_width=True, key="feedback_return"):
+                back_to_survey()
+        else:
+            remaining = int(120 - elapsed_time)
+            st.markdown("---")
+            st.info(f"⏱️ Please interact with the application. Continue button will appear in {remaining} seconds.")
 
 # Footer with dataset information
 st.markdown("---")
@@ -997,14 +1015,25 @@ if os.getenv('HICXAI_DEBUG_MODE', 'false').lower() == 'true':
         st.markdown(f"**Concurrent Testing:** ✅ Enabled")
         st.markdown(f"**User Isolation:** ✅ Session-based")
 
-# Sticky return footer (always available if return URL exists)
+# Sticky return footer (only show after 2 minutes of engagement)
 if st.session_state.get("return_raw"):
-    st.markdown("---")
-    col_a, col_b = st.columns([3, 1])
-    with col_a:
-        remaining = max(0, int(st.session_state.deadline_ts - time.time()))
-        m, s = divmod(remaining, 60)
-        st.caption(f"⏱️ Up to {m}:{s:02d} remaining. You can return anytime.")
-    with col_b:
-        if st.button("✅ Continue to survey", type="primary", use_container_width=True, key="footer_return"):
-            back_to_survey()
+    elapsed_time = time.time() - st.session_state.get("start_time", time.time())
+    
+    if elapsed_time >= 120:  # 2 minutes = 120 seconds
+        st.markdown("---")
+        col_a, col_b = st.columns([3, 1])
+        with col_a:
+            remaining = max(0, int(st.session_state.deadline_ts - time.time()))
+            m, s = divmod(remaining, 60)
+            st.caption(f"⏱️ Up to {m}:{s:02d} remaining. You can return anytime.")
+        with col_b:
+            if st.button("✅ Continue to survey", type="primary", use_container_width=True, key="footer_return"):
+                back_to_survey()
+    else:
+        # Show countdown until button appears
+        st.markdown("---")
+        wait_time = int(120 - elapsed_time)
+        m, s = divmod(wait_time, 60)
+        remaining_deadline = max(0, int(st.session_state.deadline_ts - time.time()))
+        md, sd = divmod(remaining_deadline, 60)
+        st.caption(f"⏱️ Session time: up to {md}:{sd:02d} remaining • Continue button appears in: {m}:{s:02d}")
