@@ -27,7 +27,7 @@ footer[data-testid="stFooter"] {display: none !important;}
 .stDeployButton {display: none !important;}
 button[kind="header"] {display: none !important;}
 
-/* Hide 'Made with Streamlit' badges */
+/* Hide 'Made with Streamlit' badges and creator links */
 .viewerBadge_link__qRIco {display: none !important;}
 .viewerBadge_link__Ua7HT {display: none !important;}
 .viewerBadge_container__r5tak {display: none !important;}
@@ -35,6 +35,9 @@ button[kind="header"] {display: none !important;}
 a.viewer-badge {display: none !important;}
 a[href*="streamlit.io"] {display: none !important;}
 a[href*="streamlit.io/cloud"] {display: none !important;}
+a[href*="share.streamlit.io/user"] {display: none !important;}
+a[href*="/user/ksauka"] {display: none !important;}
+a[target="_blank"][href^="https://share.streamlit.io"] {display: none !important;}
 
 /* Remove padding after footer removal */
 section.main > div {padding-bottom: 0 !important;}
