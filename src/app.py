@@ -9,40 +9,89 @@ st.set_page_config(page_title="AI Loan Assistant - Credit Pre-Assessment", layou
 # Hide Streamlit branding for anonymous review
 st.markdown("""
 <style>
-/* Hide all Streamlit branding */
+/* ===== COMPREHENSIVE STREAMLIT BRANDING REMOVAL ===== */
+
+/* Hide header elements */
 #MainMenu {visibility: hidden !important;}
 header {visibility: hidden !important;}
-footer {visibility: hidden !important;}
 [data-testid="stHeader"] {display: none !important;}
 [data-testid="stToolbar"] {display: none !important;}
-[data-testid="stFooter"] {display: none !important;}
 [data-testid="stDecoration"] {display: none !important;}
 [data-testid="stStatusWidget"] {display: none !important;}
-div[role="contentinfo"] {display: none !important;}
+button[kind="header"] {display: none !important;}
+
+/* Hide footer elements - ALL variations */
+footer {visibility: hidden !important; display: none !important;}
+[data-testid="stFooter"] {display: none !important;}
 footer[data-testid="stFooter"] {display: none !important;}
+div[role="contentinfo"] {display: none !important;}
+[class*="footer"] {display: none !important;}
+[class*="Footer"] {display: none !important;}
 
 /* Hide deploy/manage buttons */
 [data-testid="manage-app-button"] {display: none !important;}
 .stAppDeployButton {display: none !important;}
 .stDeployButton {display: none !important;}
-button[kind="header"] {display: none !important;}
 
-/* Hide 'Made with Streamlit' badges and creator links */
+/* ===== HIDE ALL CREATOR ATTRIBUTION ===== */
+
+/* Text links to creator profile */
+a[href*="streamlit.io"] {display: none !important;}
+a[href*="share.streamlit.io/user"] {display: none !important;}
+a[href*="/user/ksauka"] {display: none !important;}
+a[target="_blank"][href^="https://share.streamlit.io"] {display: none !important;}
+
+/* Image/Avatar links to creator profile */
+a[href*="streamlit.io"] img {display: none !important;}
+a[href*="share.streamlit.io"] img {display: none !important;}
+a img[src*="avatar"] {display: none !important;}
+a img[src*="profile"] {display: none !important;}
+img[alt*="creator"] {display: none !important;}
+img[alt*="author"] {display: none !important;}
+
+/* Viewer badge containers and links */
 .viewerBadge_link__qRIco {display: none !important;}
 .viewerBadge_link__Ua7HT {display: none !important;}
 .viewerBadge_container__r5tak {display: none !important;}
 .viewerBadge_container__2QSob {display: none !important;}
 a.viewer-badge {display: none !important;}
-a[href*="streamlit.io"] {display: none !important;}
-a[href*="streamlit.io/cloud"] {display: none !important;}
-a[href*="share.streamlit.io/user"] {display: none !important;}
-a[href*="/user/ksauka"] {display: none !important;}
-a[target="_blank"][href^="https://share.streamlit.io"] {display: none !important;}
+[class*="viewerBadge"] {display: none !important;}
+[class*="ViewerBadge"] {display: none !important;}
+
+/* Profile/Avatar elements */
+[class*="avatar"] {display: none !important;}
+[class*="Avatar"] {display: none !important;}
+[class*="profile"] {display: none !important;}
+[class*="Profile"] {display: none !important;}
+[data-testid*="avatar"] {display: none !important;}
+[data-testid*="profile"] {display: none !important;}
+
+/* Any div containing creator attribution at bottom of page */
+div[class*="creator"] {display: none !important;}
+div[class*="author"] {display: none !important;}
+div[class*="attribution"] {display: none !important;}
+
+/* Catch-all: any link in bottom 100px of page pointing to streamlit.io */
+body > div:last-child a[href*="streamlit.io"] {display: none !important;}
+.main > div:last-child a[href*="streamlit.io"] {display: none !important;}
+
+/* Nuclear option: hide entire bottom-most div if it contains streamlit links */
+div:has(a[href*="streamlit.io"]) {display: none !important;}
+
+/* Disable pointer events on any remaining visible elements */
+a[href*="streamlit.io"],
+a[href*="share.streamlit.io"],
+img[src*="avatar"],
+img[src*="profile"] {
+    pointer-events: none !important;
+    cursor: default !important;
+    display: none !important;
+}
 
 /* Remove padding after footer removal */
 section.main > div {padding-bottom: 0 !important;}
 
-/* Hide any remaining creator info */
+/* Legacy class hiding */
 .css-1v0mbdj {display: none !important;}
 </style>
 <meta name="robots" content="noindex, nofollow">
