@@ -9,20 +9,38 @@ st.set_page_config(page_title="AI Loan Assistant - Credit Pre-Assessment", layou
 # Hide Streamlit branding for anonymous review
 st.markdown("""
 <style>
-#MainMenu {visibility: hidden;}
-header {visibility: hidden;}
-footer {visibility: hidden;}
-[data-testid="stHeader"]  {display: none !important;}
+/* Hide all Streamlit branding */
+#MainMenu {visibility: hidden !important;}
+header {visibility: hidden !important;}
+footer {visibility: hidden !important;}
+[data-testid="stHeader"] {display: none !important;}
 [data-testid="stToolbar"] {display: none !important;}
-[data-testid="stFooter"]  {display: none !important;}
-div[role="contentinfo"]   {display: none !important;}
+[data-testid="stFooter"] {display: none !important;}
+[data-testid="stDecoration"] {display: none !important;}
+[data-testid="stStatusWidget"] {display: none !important;}
+div[role="contentinfo"] {display: none !important;}
+footer[data-testid="stFooter"] {display: none !important;}
+
+/* Hide deploy/manage buttons */
 [data-testid="manage-app-button"] {display: none !important;}
-.stAppDeployButton, .stDeployButton {display: none !important;}
-.viewerBadge_link__Ua7HT,
-.viewerBadge_container__2QSob,
-a.viewer-badge,
+.stAppDeployButton {display: none !important;}
+.stDeployButton {display: none !important;}
+button[kind="header"] {display: none !important;}
+
+/* Hide 'Made with Streamlit' badges */
+.viewerBadge_link__qRIco {display: none !important;}
+.viewerBadge_link__Ua7HT {display: none !important;}
+.viewerBadge_container__r5tak {display: none !important;}
+.viewerBadge_container__2QSob {display: none !important;}
+a.viewer-badge {display: none !important;}
+a[href*="streamlit.io"] {display: none !important;}
 a[href*="streamlit.io/cloud"] {display: none !important;}
+
+/* Remove padding after footer removal */
 section.main > div {padding-bottom: 0 !important;}
+
+/* Hide any remaining creator info */
+.css-1v0mbdj {display: none !important;}
 </style>
 <meta name="robots" content="noindex, nofollow">
 """, unsafe_allow_html=True)
