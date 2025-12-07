@@ -6,7 +6,7 @@ import env_loader
 # Configure page FIRST - before any other Streamlit commands
 st.set_page_config(page_title="AI Loan Assistant - Credit Pre-Assessment", layout="wide")
 
-# Hide Streamlit branding for anonymous review
+# Hide Streamlit branding for anonymous review (CSS + JavaScript)
 st.markdown("""
 <style>
 /* ===== COMPREHENSIVE STREAMLIT BRANDING REMOVAL ===== */
@@ -94,6 +94,59 @@ section.main > div {padding-bottom: 0 !important;}
 /* Legacy class hiding */
 .css-1v0mbdj {display: none !important;}
 </style>
+
+<script>
+// JavaScript to forcefully remove Streamlit branding (runs continuously)
+(function() {
+    function removeStreamlitBranding() {
+        // Remove footer elements
+        const footers = document.querySelectorAll('footer, [data-testid="stFooter"], [class*="footer"], [class*="Footer"]');
+        footers.forEach(el => el.remove());
+        
+        // Remove header elements
+        const headers = document.querySelectorAll('header, [data-testid="stHeader"], #MainMenu');
+        headers.forEach(el => el.remove());
+        
+        // Remove any links to streamlit.io
+        const streamlitLinks = document.querySelectorAll('a[href*="streamlit.io"], a[href*="share.streamlit.io"]');
+        streamlitLinks.forEach(el => el.remove());
+        
+        // Remove viewer badges
+        const badges = document.querySelectorAll('[class*="viewerBadge"], [class*="ViewerBadge"], .viewer-badge');
+        badges.forEach(el => el.remove());
+        
+        // Remove avatars and profile images
+        const avatars = document.querySelectorAll('[class*="avatar"], [class*="Avatar"], [class*="profile"], [class*="Profile"]');
+        avatars.forEach(el => {
+            // Only remove if it's in a link to streamlit
+            const parent = el.closest('a');
+            if (parent && parent.href && parent.href.includes('streamlit.io')) {
+                parent.remove();
+            }
+        });
+        
+        // Remove any div that contains streamlit links
+        const allLinks = document.querySelectorAll('a[href*="streamlit.io"]');
+        allLinks.forEach(link => {
+            const container = link.closest('div');
+            if (container) {
+                container.remove();
+            }
+        });
+    }
+    
+    // Run immediately
+    removeStreamlitBranding();
+    
+    // Run every 500ms to catch dynamically added elements
+    setInterval(removeStreamlitBranding, 500);
+    
+    // Also run on DOM changes
+    const observer = new MutationObserver(removeStreamlitBranding);
+    observer.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+
 <meta name="robots" content="noindex, nofollow">
 """, unsafe_allow_html=True)
 
